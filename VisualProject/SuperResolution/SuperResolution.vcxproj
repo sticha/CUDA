@@ -163,11 +163,18 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="divergence.cu" />
     <CudaCompile Include="helper.cu" />
     <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="main.cu" />
+    <CudaCompile Include="projections.cu" />
+    <CudaCompile Include="update.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="divergence.h" />
     <ClInclude Include="helper.h" />
+    <ClInclude Include="projections.h" />
+    <ClInclude Include="update.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

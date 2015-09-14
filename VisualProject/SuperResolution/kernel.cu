@@ -1,121 +1,209 @@
+// ###
+// ###
+// ### Practical Course: GPU Programming in Computer Vision
+// ###
+// ###
+// ### Technical University Munich, Computer Vision Group
+// ### Summer Semester 2015, September 7 - October 6
+// ###
+// ###
+// ### Thomas Moellenhoff, Robert Maier, Caner Hazirbas
+// ###
+// ###
+// ###
+// ### THIS FILE IS SUPPOSED TO REMAIN UNCHANGED
+// ###
+// ###
 
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+
 #include "helper.h"
-#include <stdio.h>
+#include <iostream>
+using namespace std;
 
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
+// uncomment to use the camera
+//#define CAMERA
 
-__global__ void addKernel(int *c, const int *a, const int *b)
+
+
+
+
+int main(int argc, char **argv)
 {
-    int i = threadIdx.x;
-    c[i] = a[i] + b[i];
-}
+	// Before the GPU can process your kernels, a so called "CUDA context" must be initialized
+	// This happens on the very first call to a CUDA function, and takes some time (around half a second)
+	// We will do it right here, so that the run time measurements are accurate
+	cudaDeviceSynchronize();  CUDA_CHECK;
 
-int main()
-{
-    const int arraySize = 5;
-    const int a[arraySize] = { 1, 2, 3, 4, 5 };
-    const int b[arraySize] = { 10, 20, 30, 40, 50 };
-    int c[arraySize] = { 0 };
 
-    // Add vectors in parallel.
-    cudaError_t cudaStatus = addWithCuda(c, a, b, arraySize);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "addWithCuda failed!");
-        return 1;
-    }
 
-    printf("{1,2,3,4,5} + {10,20,30,40,50} = {%d,%d,%d,%d,%d}\n",
-        c[0], c[1], c[2], c[3], c[4]);
 
-    // cudaDeviceReset must be called before exiting in order for profiling and
-    // tracing tools such as Nsight and Visual Profiler to show complete traces.
-    cudaStatus = cudaDeviceReset();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
-        return 1;
-    }
+	// Reading command line parameters:
+	// getParam("param", var, argc, argv) looks whether "-param xyz" is specified, and if so stores the value "xyz" in "var"
+	// If "-param" is not specified, the value of "var" remains unchanged
+	//
+	// return value: getParam("param", ...) returns true if "-param" is specified, and false otherwise
 
-    return 0;
-}
+#ifdef CAMERA
+#else
+	// input image
+	string image = "";
+	bool ret = getParam("i", image, argc, argv);
+	if (!ret) cerr << "ERROR: no image specified" << endl;
+	if (argc <= 1) { cout << "Usage: " << argv[0] << " -i <image> [-repeats <repeats>] [-gray]" << endl; return 1; }
+#endif
 
-// Helper function for using CUDA to add vectors in parallel.
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size)
-{
-    int *dev_a = 0;
-    int *dev_b = 0;
-    int *dev_c = 0;
-    cudaError_t cudaStatus;
+	// number of computation repetitions to get a better run time measurement
+	int repeats = 1;
+	getParam("repeats", repeats, argc, argv);
+	cout << "repeats: " << repeats << endl;
 
-    // Choose which GPU to run on, change this on a multi-GPU system.
-    cudaStatus = cudaSetDevice(0);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
-        goto Error;
-    }
+	// load the input image as grayscale if "-gray" is specifed
+	bool gray = false;
+	getParam("gray", gray, argc, argv);
+	cout << "gray: " << gray << endl;
 
-    // Allocate GPU buffers for three vectors (two input, one output)    .
-    cudaStatus = cudaMalloc((void**)&dev_c, size * sizeof(int));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
+	// ### Define your own parameters here as needed    
 
-    cudaStatus = cudaMalloc((void**)&dev_a, size * sizeof(int));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
 
-    cudaStatus = cudaMalloc((void**)&dev_b, size * sizeof(int));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
 
-    // Copy input vectors from host memory to GPU buffers.
-    cudaStatus = cudaMemcpy(dev_a, a, size * sizeof(int), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
 
-    cudaStatus = cudaMemcpy(dev_b, b, size * sizeof(int), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
+	// Init camera / Load input image
+#ifdef CAMERA
 
-    // Launch a kernel on the GPU with one thread for each element.
-    addKernel<<<1, size>>>(dev_c, dev_a, dev_b);
+	// Init camera
+	cv::VideoCapture camera(0);
+	if (!camera.isOpened()) { cerr << "ERROR: Could not open camera" << endl; return 1; }
+	int camW = 640;
+	int camH = 480;
+	camera.set(CV_CAP_PROP_FRAME_WIDTH, camW);
+	camera.set(CV_CAP_PROP_FRAME_HEIGHT, camH);
+	// read in first frame to get the dimensions
+	cv::Mat mIn;
+	camera >> mIn;
 
-    // Check for any errors launching the kernel
-    cudaStatus = cudaGetLastError();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
-    
-    // cudaDeviceSynchronize waits for the kernel to finish, and returns
-    // any errors encountered during the launch.
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-        goto Error;
-    }
+#else
 
-    // Copy output vector from GPU buffer to host memory.
-    cudaStatus = cudaMemcpy(c, dev_c, size * sizeof(int), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
+	// Load the input image using opencv (load as grayscale if "gray==true", otherwise as is (may be color or grayscale))
+	cv::Mat mIn = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
+	// check
+	if (mIn.data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
 
-Error:
-    cudaFree(dev_c);
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    
-    return cudaStatus;
-}
+#endif
+
+	// convert to float representation (opencv loads image values as single bytes by default)
+	mIn.convertTo(mIn, CV_32F);
+	// convert range of each channel to [0,1] (opencv default is [0,255])
+	mIn /= 255.f;
+	// get image dimensions
+	int w = mIn.cols;         // width
+	int h = mIn.rows;         // height
+	int nc = mIn.channels();  // number of channels
+	cout << "image: " << w << " x " << h << endl;
+
+
+
+
+	// Set the output image format
+	// ###
+	// ###
+	// ### TODO: Change the output image format as needed
+	// ###
+	// ###
+	cv::Mat mOut(h, w, mIn.type());  // mOut will have the same number of channels as the input image, nc layers
+	//cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
+	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
+	// ### Define your own output images here as needed
+
+
+
+
+	// Allocate arrays
+	// input/output image width: w
+	// input/output image height: h
+	// input image number of channels: nc
+	// output image number of channels: mOut.channels(), as defined above (nc, 3, or 1)
+
+	// allocate raw input image array
+	float *imgIn = new float[(size_t)w*h*nc];
+
+	// allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
+	float *imgOut = new float[(size_t)w*h*mOut.channels()];
+
+
+
+
+	// For camera mode: Make a loop to read in camera frames
+#ifdef CAMERA
+	// Read a camera image frame every 30 milliseconds:
+	// cv::waitKey(30) waits 30 milliseconds for a keyboard input,
+	// returns a value <0 if no key is pressed during this time, returns immediately with a value >=0 if a key is pressed
+	while (cv::waitKey(30) < 0)
+	{
+		// Get camera image
+		camera >> mIn;
+		// convert to float representation (opencv loads image values as single bytes by default)
+		mIn.convertTo(mIn, CV_32F);
+		// convert range of each channel to [0,1] (opencv default is [0,255])
+		mIn /= 255.f;
+#endif
+
+		// Init raw input image array
+		// opencv images are interleaved: rgb rgb rgb...  (actually bgr bgr bgr...)
+		// But for CUDA it's better to work with layered images: rrr... ggg... bbb...
+		// So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
+		convert_mat_to_layered(imgIn, mIn);
+
+
+
+
+
+
+		Timer timer; timer.start();
+		// ###
+		// ###
+		// ### TODO: Main computation
+		// ###
+		// ###
+		timer.end();  float t = timer.get();  // elapsed time in seconds
+		cout << "time: " << t * 1000 << " ms" << endl;
+
+
+
+
+
+
+		// show input image
+		showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
+
+		// show output image: first convert to interleaved opencv format from the layered raw array
+		convert_layered_to_mat(mOut, imgOut);
+		showImage("Output", mOut, 100 + w + 40, 100);
+
+		// ### Display your own output images here as needed
+
+#ifdef CAMERA
+		// end of camera loop
+	}
+#else
+		// wait for key inputs
+		cv::waitKey(0);
+#endif
+
+
+
+
+		// save input and result
+		cv::imwrite("image_input.png", mIn*255.f);  // "imwrite" assumes channel range [0,255]
+		cv::imwrite("image_result.png", mOut*255.f);
+
+		// free allocated arrays
+		delete[] imgIn;
+		delete[] imgOut;
+
+		// close all opencv windows
+		cvDestroyAllWindows();
+		return 0;
+	}
+
+
+

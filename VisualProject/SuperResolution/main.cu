@@ -55,7 +55,7 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
  * u1, u2, are input images with size w*h*nc
  * v1, v2, are vector components with size w*h describing the flow
  */
-void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, float tau, int iterations, int w, int h, int nc) {
+void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int iterations, int w, int h, int nc) {
 	// Allocate GPU memory
 	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p;
 	float2* d_A, *d_q1, *d_q2;
@@ -96,15 +96,13 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, floa
 	calculateGradient<<<grid3d, block3d>>>(d_u2, d_A, w, h, nc);
 	
 	float sigmaQ = 0.5f;
-	float sigmaP = 0.5f;
-	// TODO Calc Real Sigma
 
 	for (int i = 0; i < iterations; i++) {
 		// Update p, q1, q2 and v
-		updateP<<<grid3d, block3d>>>(d_p, d_v1, d_v2, d_A, d_b, sigmaP, gamma, w, h);
+		updateP<<<grid3d, block3d>>>(d_p, d_v1, d_v2, d_A, d_b, gamma, w, h);
 		updateQ<<<grid2d, block2d>>>(d_q1, d_v1, sigmaQ, w, h);
 		updateQ<<<grid2d, block2d>>>(d_q2, d_v2, sigmaQ, w, h);
-		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, tau, w, h);
+		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, w, h);
 	}
 
 	// Copy result to Host
@@ -152,10 +150,6 @@ int main(int argc, char **argv)
 	cout << "gray: " << gray << endl;
 
 	// ### Define your own parameters here as needed    
-	float tau = 0.2f;
-	getParam("tau", tau, argc, argv);
-	cout << "tau: " << tau << endl;
-
 	float gamma = 0.2f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
@@ -280,7 +274,7 @@ int main(int argc, char **argv)
 
 		Timer timer; timer.start();
 		// Call the CUDA computation
-		calculateFlow(imgIn[0], imgIn[1], v1, v2, gamma, tau, iterations, w, h, nc);
+		calculateFlow(imgIn[0], imgIn[1], v1, v2, gamma, iterations, w, h, nc);
 
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;

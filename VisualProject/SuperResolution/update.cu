@@ -1,4 +1,6 @@
 #include "update.h"
+#include "projections.h"
+#include "divergence.h"
 
 __global__ void updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float* d_b, float sigma, float gamma, int w, int h) {
 	// get current thread index (x, y, c)

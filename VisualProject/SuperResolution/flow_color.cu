@@ -15,8 +15,9 @@ __global__ void createColorCoding(float* d_v1, float* d_v2, float* d_out, int w,
 	int idx = x + w * y;
 
 	// compute angle
+	float v1 = d_v1[idx];
 	float v2 = d_v2[idx];
-	float angle = acosf(v2 / sqrtf(v2));
+	float angle = acosf(v2 / sqrtf(v1*v1 + v2*v2));
 	if (d_v1[idx] < 0) {
 		angle = 2 * PI - angle;
 	}

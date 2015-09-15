@@ -1,5 +1,15 @@
 #include "divergence.h"
 
+__global__ void calculateGradient(float* d_u, float* d_v1, float* d_v2, int w, int h, int nc) {
+	int x = threadIdx.x + blockDim.x * blockIdx.x;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
+	int c = threadIdx.z;
+
+	if (x >= w || y >= h || c >= nc) return;
+
+	gradient(d_u, d_v1, d_v2, x, y, c, w, h);
+}
+
 __device__ void gradient(float* d_u, float* d_v1, float* d_v2, int x, int y, int c, int w, int h){
 	int ind = x + y*w + c*w*h;
 

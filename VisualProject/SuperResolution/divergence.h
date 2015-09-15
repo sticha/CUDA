@@ -8,4 +8,9 @@ __device__ float2 gradient(float* d_u, int x, int y, int c, int w, int h);
 __device__ void divergence(float* d_div, float2* d_q, int x, int y, int w, int h);
 __device__ float divergence(float2* d_q, int x, int y, int w, int h);
 
+/**
+ * CUDA Kernel, that calculates all 
+ */
+__global__ void calculateGradient(float* d_u, float* d_v1, float* d_v2, int w, int h, int nc);
+
 #endif

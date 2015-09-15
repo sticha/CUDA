@@ -17,8 +17,21 @@
 
 
 #include "helper.h"
+#include "divergence.h"
+#include "projections.h"
+#include "update.h"
+#include "flow_color.h"
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 using namespace std;
+
+//Input parameters
+const string imgPath = "../material/";
+const string imgName = "Img_";
+const string imgEnding = ".png";
+const int numDigits = 2;
+const int numImgs = 2;
 
 // uncomment to use the camera
 //#define CAMERA
@@ -83,15 +96,6 @@ int main(int argc, char **argv)
 	//
 	// return value: getParam("param", ...) returns true if "-param" is specified, and false otherwise
 
-#ifdef CAMERA
-#else
-	// input image
-	string image = "";
-	bool ret = getParam("i", image, argc, argv);
-	if (!ret) cerr << "ERROR: no image specified" << endl;
-	if (argc <= 1) { cout << "Usage: " << argv[0] << " -i <image> [-repeats <repeats>] [-gray]" << endl; return 1; }
-#endif
-
 	// number of computation repetitions to get a better run time measurement
 	int repeats = 1;
 	getParam("repeats", repeats, argc, argv);
@@ -121,14 +125,10 @@ int main(int argc, char **argv)
 	cv::Mat mIn;
 	camera >> mIn;
 
-#else
-
 	// Load the input image using opencv (load as grayscale if "gray==true", otherwise as is (may be color or grayscale))
 	cv::Mat mIn = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
 	// check
 	if (mIn.data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
-
-#endif
 
 	// convert to float representation (opencv loads image values as single bytes by default)
 	mIn.convertTo(mIn, CV_32F);
@@ -140,21 +140,41 @@ int main(int argc, char **argv)
 	int nc = mIn.channels();  // number of channels
 	cout << "image: " << w << " x " << h << endl;
 
-
+#endif
+	// Load all of the images needed
+	cv::Mat * mIn = new cv::Mat[numImgs];
+	for (int i = 0; i < numImgs; i++){
+		// Generating the complete img Path
+		stringstream ss;
+		ss << setw(numDigits) << setfill('0') << i;
+		string image = imgPath + ss.str() + imgEnding;
+		// Loading the img
+		mIn[i] = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
+		if (mIn[i].data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
+		// convert to float representation (opencv loads image values as single bytes by default)
+		mIn[i].convertTo(mIn[i], CV_32F);
+		// convert range of each channel to [0,1] (opencv default is [0,255])
+		mIn[i] /= 255.f;
+	}
+	// Its's assumed width and height is the same for all Images
+	int w = mIn[0].cols;
+	int h = mIn[0].rows;
+	int nc = mIn[0].channels();
 
 
 	// Set the output image format
-	// ###
-	// ###
-	// ### TODO: Change the output image format as needed
-	// ###
-	// ###
+#ifdef CAMERA
 	cv::Mat mOut(h, w, mIn.type());  // mOut will have the same number of channels as the input image, nc layers
 	//cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
 	// ### Define your own output images here as needed
-
-
+#else
+	cv::Mat mOut(h, w, mIn[0].type());  // mOut will have the same number of channels as the input image, nc layers
+	//cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
+	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
+#endif
+	cv::Mat mV1(h, w, CV_32FC1);
+	cv::Mat mV2(h, w, CV_32FC1);
 
 
 	// Allocate arrays
@@ -162,14 +182,21 @@ int main(int argc, char **argv)
 	// input/output image height: h
 	// input image number of channels: nc
 	// output image number of channels: mOut.channels(), as defined above (nc, 3, or 1)
-
+#ifdef CAMERA
 	// allocate raw input image array
 	float *imgIn = new float[(size_t)w*h*nc];
-
+#else
+	// Allocate space for an arbitary amount of images
+	float **imgIn = new float*[numImgs];
+	for (int i = 0; i < numImgs; i++){
+		imgIn[i] = new float[(size_t)w*h*nc];
+	}
+#endif
 	// allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
 	float *imgOut = new float[(size_t)w*h*mOut.channels()];
 
-
+	float *v1 = new float[(size_t)w*h*mV1.channels()];
+	float *v2 = new float[(size_t)w*h*mV2.channels()];
 
 
 	// For camera mode: Make a loop to read in camera frames
@@ -185,25 +212,23 @@ int main(int argc, char **argv)
 		mIn.convertTo(mIn, CV_32F);
 		// convert range of each channel to [0,1] (opencv default is [0,255])
 		mIn /= 255.f;
-#endif
+
 
 		// Init raw input image array
 		// opencv images are interleaved: rgb rgb rgb...  (actually bgr bgr bgr...)
 		// But for CUDA it's better to work with layered images: rrr... ggg... bbb...
 		// So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
 		convert_mat_to_layered(imgIn, mIn);
-
-
-
-
-
+#endif
+		// Convert all images
+		for (int i = 0; i < numImgs; i++) {
+			convert_mat_to_layered(imgIn[i], mIn[i]);
+		}
 
 		Timer timer; timer.start();
-		// ###
-		// ###
-		// ### TODO: Main computation
-		// ###
-		// ###
+		// Call the CUDA computation
+		calculateFlow(imgIn[0], imgIn[1], v1, v2, w, h, nc);
+
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;
 
@@ -213,13 +238,22 @@ int main(int argc, char **argv)
 
 
 		// show input image
+#ifdef CAMERA
 		showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
-
+#else
+		showImage("Input", mIn[0], 100, 100);
+		showImage("Input", mIn[1], 100, 100);
+#endif
+		/* Not needed for now
 		// show output image: first convert to interleaved opencv format from the layered raw array
 		convert_layered_to_mat(mOut, imgOut);
-		showImage("Output", mOut, 100 + w + 40, 100);
+		showImage("Output", mOut, 100 + w + 40, 100);*/
 
 		// ### Display your own output images here as needed
+		convert_layered_to_mat(mOut, imgOut);
+		showImage("V1", mV1, 100 + w + 40, 100);
+		convert_layered_to_mat(mOut, imgOut);
+		showImage("V2", mV2, 100 + w + 40, 100);
 
 #ifdef CAMERA
 		// end of camera loop
@@ -231,11 +265,12 @@ int main(int argc, char **argv)
 
 
 
-
+#ifdef SAVE
 		// save input and result
 		cv::imwrite("image_input.png", mIn*255.f);  // "imwrite" assumes channel range [0,255]
-		cv::imwrite("image_result.png", mOut*255.f);
-
+		cv::imwrite("image_V1.png", v1*255.f);
+		cv::imwrite("image_V2.png", v2*255.f);
+#endif
 		// free allocated arrays
 		delete[] imgIn;
 		delete[] imgOut;

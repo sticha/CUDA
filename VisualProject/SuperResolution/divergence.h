@@ -12,5 +12,6 @@ __device__ float divergence(float2* d_q, int x, int y, int w, int h);
  * CUDA Kernel, that calculates all 
  */
 __global__ void calculateGradient(float* d_u, float* d_v1, float* d_v2, int w, int h, int nc);
+__global__ void calculateGradient(float* d_u, float2* d_v, int w, int h, int nc);
 
 #endif

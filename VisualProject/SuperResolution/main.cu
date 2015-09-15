@@ -27,11 +27,12 @@
 using namespace std;
 
 //Input parameters
-const string imgPath = "../material/";
-const string imgName = "Img_";
+const string imgPath = "../../material/Images/";
+const string imgName = "carwide_";
 const string imgEnding = ".png";
 const int numDigits = 2;
 const int numImgs = 2;
+const int startImg = 1;
 
 // uncomment to use the camera
 //#define CAMERA
@@ -190,11 +191,11 @@ int main(int argc, char **argv)
 #endif
 	// Load all of the images needed
 	cv::Mat * mIn = new cv::Mat[numImgs];
-	for (int i = 0; i < numImgs; i++){
+	for (int i = startImg; i < numImgs + startImg; i++){
 		// Generating the complete img Path
 		stringstream ss;
 		ss << setw(numDigits) << setfill('0') << i;
-		string image = imgPath + ss.str() + imgEnding;
+		string image = imgPath + imgName + ss.str() + imgEnding;
 		// Loading the img
 		mIn[i] = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
 		if (mIn[i].data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }

@@ -36,11 +36,26 @@ const int numImgs = 2;
 // uncomment to use the camera
 //#define CAMERA
 
+
+// The difference d_b = d_u2 - d_u1
+__global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
+	int c = threadIdx.z;
+
+	if (x >= w || y >= h)
+		return;
+
+	int idx = x + y * w + c * w * h;
+	d_b[idx] = d_u2[idx] - d_u1[idx];
+}
+
+
 /**
  * u1, u2, are input images with size w*h*nc
  * v1, v2, are vector components with size w*h describing the flow
  */
-void calculateFlow(float* u1, float* u2, float* v1, float* v2, int w, int h, int nc) {
+void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, float tau, int iterations, int w, int h, int nc) {
 	// Allocate GPU memory
 	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p;
 	float2* d_A, *d_q1, *d_q2;
@@ -64,7 +79,37 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, int w, int h, int
 	cudaMalloc(&d_q2, w*h*sizeof(float2));
 	CUDA_CHECK;
 
-	// TODO: Do calculations here
+	// Copy images to GPU
+	cudaMemcpy(d_u1, u1, n * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_u2, u2, n * sizeof(float), cudaMemcpyHostToDevice);
+
+	// Calculate grid size
+	dim3 block3d = dim3(16, 16, nc);
+	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
+	
+	dim3 block2d = dim3(16, 16, 1);
+	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
+
+	// Calculate b 
+	imgDif<<<grid3d, block3d>>>(d_u1, d_u2, d_b, w, h);
+	// Calculate A
+	calculateGradient<<<grid3d, block3d>>>(d_u2, d_A, w, h, nc);
+	
+	float sigmaQ = 0.5f;
+	float sigmaP = 0.5f;
+	// TODO Calc Real Sigma
+
+	for (int i = 0; i < iterations; i++) {
+		// Update p, q1, q2 and v
+		updateP<<<grid3d, block3d>>>(d_p, d_v1, d_v2, d_A, d_b, sigmaP, gamma, w, h);
+		updateQ<<<grid2d, block2d>>>(d_q1, d_v1, sigmaQ, w, h);
+		updateQ<<<grid2d, block2d>>>(d_q2, d_v2, sigmaQ, w, h);
+		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, tau, w, h);
+	}
+
+	// Copy result to Host
+	cudaMemcpy(v1, v1, n * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(v2, v2, n * sizeof(float), cudaMemcpyDeviceToHost);
 
 	// Free GPU Memory
 	cudaFree(d_u1);
@@ -107,9 +152,17 @@ int main(int argc, char **argv)
 	cout << "gray: " << gray << endl;
 
 	// ### Define your own parameters here as needed    
+	float tau = 0.2f;
+	getParam("tau", tau, argc, argv);
+	cout << "tau: " << tau << endl;
 
+	float gamma = 0.2f;
+	getParam("gamma", gamma, argc, argv);
+	cout << "gamma: " << gamma << endl;
 
-
+	float iterations = 20;
+	getParam("iterations", iterations, argc, argv);
+	cout << "iterations: " << iterations << endl;
 
 	// Init camera / Load input image
 #ifdef CAMERA
@@ -227,7 +280,7 @@ int main(int argc, char **argv)
 
 		Timer timer; timer.start();
 		// Call the CUDA computation
-		calculateFlow(imgIn[0], imgIn[1], v1, v2, w, h, nc);
+		calculateFlow(imgIn[0], imgIn[1], v1, v2, gamma, tau, iterations, w, h, nc);
 
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;

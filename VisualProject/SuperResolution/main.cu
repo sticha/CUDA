@@ -143,6 +143,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	}
 
 	createColorCoding<<<grid2dborder, block2d>>>(d_v1, d_v2, d_out, wborder, hborder, colorBorder);
+	//createColorCoding<<<grid2dborder, block2d>>>(d_u1, d_v1, d_v2, d_out, wborder, hborder, nc, colorBorder);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 
@@ -339,8 +340,8 @@ int main(int argc, char **argv)
 #ifdef CAMERA
 		showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
 #else
-		showImage("Input", mIn[0], 100, 100);
-		showImage("Input", mIn[1], 100, 100);
+		showImage("Input1", mIn[0], 100, 100);
+		showImage("Input2", mIn[1], 100, 100);
 #endif
 		
 		// show output image: first convert to interleaved opencv format from the layered raw array

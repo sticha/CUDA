@@ -14,7 +14,7 @@ __device__ float d_getAngleFromVector(float v1, float v2) {
 __global__ void createColorCoding(float* d_v1, float* d_v2, float* d_out, int w, int h) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
-	int y = threadIdx.y + blockDim.y * blockDim.y;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
 
 	// return if coordinate (x, y) not inside image
 	if (x >= w || y >= h) {
@@ -57,7 +57,7 @@ __global__ void createColorCoding(float* d_v1, float* d_v2, float* d_out, int w,
 __global__ void createColorCoding(float* d_in, float* d_v1, float* d_v2, float* d_out, int w, int h, int nc) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
-	int y = threadIdx.y + blockDim.y * blockDim.y;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
 
 	// return if coordinate (x, y) not inside image
 	if (x >= w || y >= h) {

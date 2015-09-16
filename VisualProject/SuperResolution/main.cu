@@ -56,9 +56,9 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
  * u1, u2, are input images with size w*h*nc
  * v1, v2, are vector components with size w*h describing the flow
  */
-void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int iterations, int w, int h, int nc) {
+void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float gamma, int iterations, int w, int h, int nc) {
 	// Allocate GPU memory
-	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p;
+	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p, *d_out;
 	float2* d_A, *d_q1, *d_q2;
 	size_t n = w*h*nc;
 	cudaMalloc(&d_u1, n*sizeof(float));
@@ -78,6 +78,8 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	cudaMalloc(&d_q1, w*h*sizeof(float2));
 	CUDA_CHECK;
 	cudaMalloc(&d_q2, w*h*sizeof(float2));
+	CUDA_CHECK;
+	cudaMalloc(&d_out, w*h*3*sizeof(float));
 	CUDA_CHECK;
 
 	// Copy images to GPU
@@ -120,7 +122,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	CUDA_CHECK;
 	float sigmaQ = 0.5f;
 
-	for (int i = 0; i < iterations; i++) {
+	for (int i = 0; i < 100; i++) {
 		// Update p, q1, q2 and v
 		updateP<<<grid3d, block3d>>>(d_p, d_v1, d_v2, d_A, d_b, gamma, w, h);
 		cudaDeviceSynchronize();
@@ -136,10 +138,16 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 		CUDA_CHECK;
 	}
 
+	createColorCoding<<<grid2d, block2d>>>(d_v1, d_v2, d_out, w, h);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
+
 	// Copy result to Host
-	cudaMemcpy(v1, d_p, w * h * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(v1, d_v1, w * h * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 	cudaMemcpy(v2, d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaMemcpy(out, d_out, w * h * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 
 	// Free GPU Memory
@@ -152,6 +160,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	cudaFree(d_A);
 	cudaFree(d_q1);
 	cudaFree(d_q2);
+	cudaFree(d_out);
 	CUDA_CHECK;
 }
 
@@ -250,8 +259,8 @@ int main(int argc, char **argv)
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
 	// ### Define your own output images here as needed
 #else
-	cv::Mat mOut(h, w, mIn[0].type());  // mOut will have the same number of channels as the input image, nc layers
-	//cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
+	//cv::Mat mOut(h, w, mIn[0].type());  // mOut will have the same number of channels as the input image, nc layers
+	cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
 #endif
 	cv::Mat mV1(h, w, CV_32FC1);
@@ -308,7 +317,7 @@ int main(int argc, char **argv)
 
 		Timer timer; timer.start();
 		// Call the CUDA computation
-		calculateFlow(imgIn[0], imgIn[1], v1, v2, gamma, iterations, w, h, nc);
+		calculateFlow(imgIn[0], imgIn[1], v1, v2, imgOut, gamma, iterations, w, h, nc);
 
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;
@@ -325,16 +334,16 @@ int main(int argc, char **argv)
 		showImage("Input", mIn[0], 100, 100);
 		showImage("Input", mIn[1], 100, 100);
 #endif
-		/* Not needed for now
+		
 		// show output image: first convert to interleaved opencv format from the layered raw array
 		convert_layered_to_mat(mOut, imgOut);
-		showImage("Output", mOut, 100 + w + 40, 100);*/
+		showImage("ColorCoded", mOut, 100 + w + 40, 100);
 
 		// ### Display your own output images here as needed
 		convert_layered_to_mat(mV1, v1);
-		showImage("V1", mV1, 100 + w + 40, 100);
+		showImage("V1", mV1, 100 +  2 * w + 80, 100);
 		convert_layered_to_mat(mV2, v2);
-		showImage("V2", mV2, 100 + w + 40, 100);
+		showImage("V2", mV2, 100 + 3 * w + 120, 100);
 
 #ifdef CAMERA
 		// end of camera loop

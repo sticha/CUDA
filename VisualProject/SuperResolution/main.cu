@@ -82,8 +82,8 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 
 	// Copy images to GPU
 	cudaMemcpy(d_u1, u1, n * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
 	cudaMemcpy(d_u2, u2, n * sizeof(float), cudaMemcpyHostToDevice);
-	cudaDeviceSynchronize();
 	CUDA_CHECK;
 
 	// Calculate grid size
@@ -120,8 +120,10 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	}
 
 	// Copy result to Host
-	cudaMemcpy(v1, v1, n * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(v2, v2, n * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(v1, d_v1, w * h * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaMemcpy(v2, d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
 
 	// Free GPU Memory
 	cudaFree(d_u1);

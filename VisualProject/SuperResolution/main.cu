@@ -86,6 +86,23 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	cudaMemcpy(d_u2, u2, n * sizeof(float), cudaMemcpyHostToDevice);
 	CUDA_CHECK;
 
+	cudaMemset(d_v1, 0, w*h*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_v2, 0, w*h*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_b, 0, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_p, 0, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_A, 0, n*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(d_q1, 0, w*h*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(d_q2, 0, w*h*sizeof(float2));
+	CUDA_CHECK;
+
+
+
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);

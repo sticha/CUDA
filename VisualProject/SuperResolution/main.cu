@@ -126,7 +126,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	CUDA_CHECK;
 	float sigmaQ = 0.5f;
 
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < iterations; i++) {
 		// Update p, q1, q2 and v
 		updateP<<<grid3d, block3d>>>(d_p, d_v1, d_v2, d_A, d_b, gamma, w, h);
 		cudaDeviceSynchronize();
@@ -204,7 +204,7 @@ int main(int argc, char **argv)
 	getParam("border", colorBorder, argc, argv);
 	cout << "color coding border: " << colorBorder << endl;
 
-	float iterations = 100;
+	float iterations = 200;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
 

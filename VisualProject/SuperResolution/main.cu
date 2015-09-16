@@ -83,6 +83,8 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	// Copy images to GPU
 	cudaMemcpy(d_u1, u1, n * sizeof(float), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_u2, u2, n * sizeof(float), cudaMemcpyHostToDevice);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
 
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
@@ -93,17 +95,28 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 
 	// Calculate b 
 	imgDif<<<grid3d, block3d>>>(d_u1, d_u2, d_b, w, h);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
 	// Calculate A
 	calculateGradient<<<grid3d, block3d>>>(d_u2, d_A, w, h, nc);
-	
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
 	float sigmaQ = 0.5f;
 
 	for (int i = 0; i < iterations; i++) {
 		// Update p, q1, q2 and v
 		updateP<<<grid3d, block3d>>>(d_p, d_v1, d_v2, d_A, d_b, gamma, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 		updateQ<<<grid2d, block2d>>>(d_q1, d_v1, sigmaQ, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 		updateQ<<<grid2d, block2d>>>(d_q2, d_v2, sigmaQ, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 	}
 
 	// Copy result to Host
@@ -191,10 +204,11 @@ int main(int argc, char **argv)
 #endif
 	// Load all of the images needed
 	cv::Mat * mIn = new cv::Mat[numImgs];
-	for (int i = startImg; i < numImgs + startImg; i++){
+	for (int i = 0; i < numImgs; i++){
+		int imageIdx = startImg + i;
 		// Generating the complete img Path
 		stringstream ss;
-		ss << setw(numDigits) << setfill('0') << i;
+		ss << setw(numDigits) << setfill('0') << imageIdx;
 		string image = imgPath + imgName + ss.str() + imgEnding;
 		// Loading the img
 		mIn[i] = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));

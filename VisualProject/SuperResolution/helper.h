@@ -19,7 +19,6 @@
 #ifndef HELPER_H
 #define HELPER_H
 
-#define M_PI 3.1414
 #include <cuda_runtime.h>
 #include <ctime>
 #include <opencv2/highgui/highgui.hpp>

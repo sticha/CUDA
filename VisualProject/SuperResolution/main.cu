@@ -137,7 +137,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float gamma, int 
 	}
 
 	// Copy result to Host
-	cudaMemcpy(v1, d_v1, w * h * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(v1, d_p, w * h * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 	cudaMemcpy(v2, d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;

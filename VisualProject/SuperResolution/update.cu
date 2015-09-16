@@ -8,7 +8,7 @@
 __global__ void updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float* d_b, float gamma, int w, int h) {
 	// get current thread index (x, y, c)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
-	int y = threadIdx.y + blockDim.y * blockDim.y;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
 	int c = threadIdx.z;
 
 	// return if coordinate (x, y) not inside image
@@ -45,7 +45,7 @@ __global__ void updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float
 __global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
-	int y = threadIdx.y + blockDim.y * blockDim.y;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
 
 	// return if coordinate (x, y) not inside image
 	if (x >= w || y >= h) {
@@ -73,7 +73,7 @@ __global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 __global__ void updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, float2* d_q2, float2* d_A, int w, int h) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
-	int y = threadIdx.y + blockDim.y * blockDim.y;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
 
 	// return if coordinate (x, y) not inside image
 	if (x >= w || y >= h) {

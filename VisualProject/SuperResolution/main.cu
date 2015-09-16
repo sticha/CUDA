@@ -56,11 +56,13 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
  * u1, u2, are input images with size w*h*nc
  * v1, v2, are vector components with size w*h describing the flow
  */
-void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float gamma, int iterations, int w, int h, int nc) {
+void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float gamma, int iterations, int w, int h, int nc, int colorBorder) {
 	// Allocate GPU memory
 	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p, *d_out;
 	float2* d_A, *d_q1, *d_q2;
 	size_t n = w*h*nc;
+	int wborder = w + 2 * colorBorder;
+	int hborder = h + 2 * colorBorder;
 	cudaMalloc(&d_u1, n*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&d_u2, n*sizeof(float));
@@ -79,7 +81,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	CUDA_CHECK;
 	cudaMalloc(&d_q2, w*h*sizeof(float2));
 	CUDA_CHECK;
-	cudaMalloc(&d_out, w*h*3*sizeof(float));
+	cudaMalloc(&d_out, wborder*hborder * 3 * sizeof(float));
 	CUDA_CHECK;
 
 	// Copy images to GPU
@@ -112,6 +114,8 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
 
+	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
+
 	// Calculate b 
 	imgDif<<<grid3d, block3d>>>(d_u1, d_u2, d_b, w, h);
 	cudaDeviceSynchronize();
@@ -138,7 +142,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 		CUDA_CHECK;
 	}
 
-	createColorCoding<<<grid2d, block2d>>>(d_v1, d_v2, d_out, w, h);
+	createColorCoding<<<grid2dborder, block2d>>>(d_v1, d_v2, d_out, wborder, hborder, colorBorder);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 
@@ -147,7 +151,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	CUDA_CHECK;
 	cudaMemcpy(v2, d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
-	cudaMemcpy(out, d_out, w * h * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(out, d_out, wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 
 	// Free GPU Memory
@@ -192,11 +196,15 @@ int main(int argc, char **argv)
 	cout << "gray: " << gray << endl;
 
 	// ### Define your own parameters here as needed    
-	float gamma = 0.2f;
+	float gamma = 0.1f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
 
-	float iterations = 20;
+	int colorBorder = 4;
+	getParam("border", colorBorder, argc, argv);
+	cout << "color coding border: " << colorBorder << endl;
+
+	float iterations = 100;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
 
@@ -260,7 +268,7 @@ int main(int argc, char **argv)
 	// ### Define your own output images here as needed
 #else
 	//cv::Mat mOut(h, w, mIn[0].type());  // mOut will have the same number of channels as the input image, nc layers
-	cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
+	cv::Mat mOut((h+2*colorBorder),(w+2*colorBorder),CV_32FC3);    // mOut will be a color image, 3 layers
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
 #endif
 	cv::Mat mV1(h, w, CV_32FC1);
@@ -283,7 +291,7 @@ int main(int argc, char **argv)
 	}
 #endif
 	// allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
-	float *imgOut = new float[(size_t)w*h*mOut.channels()];
+	float *imgOut = new float[(size_t)(w+2*colorBorder)*(h+2*colorBorder)*mOut.channels()];
 
 	float *v1 = new float[(size_t)w*h*mV1.channels()];
 	float *v2 = new float[(size_t)w*h*mV2.channels()];
@@ -317,7 +325,7 @@ int main(int argc, char **argv)
 
 		Timer timer; timer.start();
 		// Call the CUDA computation
-		calculateFlow(imgIn[0], imgIn[1], v1, v2, imgOut, gamma, iterations, w, h, nc);
+		calculateFlow(imgIn[0], imgIn[1], v1, v2, imgOut, gamma, iterations, w, h, nc, colorBorder);
 
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;

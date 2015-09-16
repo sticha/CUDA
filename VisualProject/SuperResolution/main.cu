@@ -314,9 +314,9 @@ int main(int argc, char **argv)
 		showImage("Output", mOut, 100 + w + 40, 100);*/
 
 		// ### Display your own output images here as needed
-		convert_layered_to_mat(mOut, imgOut);
+		convert_layered_to_mat(mV1, v1);
 		showImage("V1", mV1, 100 + w + 40, 100);
-		convert_layered_to_mat(mOut, imgOut);
+		convert_layered_to_mat(mV2, v2);
 		showImage("V2", mV2, 100 + w + 40, 100);
 
 #ifdef CAMERA

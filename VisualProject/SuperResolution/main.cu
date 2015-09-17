@@ -27,12 +27,12 @@
 using namespace std;
 
 //Input parameters
-const string imgPath = "../../material/Images/";
-const string imgName = "carwide_";
-const string imgEnding = ".png";
-const int numDigits = 2;
-const int numImgs = 2;
-const int startImg = 1;
+const string stdImgPath = "../../material/Images/";
+const string stdImgName = "carwide_";
+const string stdImgType = "png";
+const int stdNumDigits = 2;
+const int stdNumImgs = 2;
+const int stdStartImg = 1;
 
 // uncomment to use the camera
 //#define CAMERA
@@ -191,7 +191,7 @@ int main(int argc, char **argv)
 	getParam("repeats", repeats, argc, argv);
 	cout << "repeats: " << repeats << endl;
 
-	// load the input image as grayscale if "-gray" is specifed
+	// load the input image as grayscale if "-gray" is specifedimgEnding
 	bool gray = false;
 	getParam("gray", gray, argc, argv);
 	cout << "gray: " << gray << endl;
@@ -208,6 +208,31 @@ int main(int argc, char **argv)
 	float iterations = 200;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
+
+	string imgPath = stdImgPath;
+	getParam("path", imgPath, argc, argv);
+	cout << "Path to the images: " << imgPath << endl;
+
+	string imgName = stdImgName;
+	getParam("name", imgName, argc, argv);
+	cout << "Name of the images: " << imgName << endl;
+
+	string imgType = stdImgType;
+	getParam("type", imgType, argc, argv);
+	cout << "Type of the images: " << imgType << endl;
+	imgType = "." + imgType;
+
+	int numImgs = stdNumImgs;
+	getParam("count", numImgs, argc, argv);
+	cout << "How many images to load: " << numImgs << endl;
+
+	int numDigits = stdNumDigits;
+	getParam("digits", numDigits, argc, argv);
+	cout << "Number of digits in the name: " << numDigits << endl;
+
+	int startImg = stdStartImg;
+	getParam("start", startImg, argc, argv);
+	cout << "Index of the start Image: " << startImg << endl;
 
 	// Init camera / Load input image
 #ifdef CAMERA
@@ -246,7 +271,7 @@ int main(int argc, char **argv)
 		// Generating the complete img Path
 		stringstream ss;
 		ss << setw(numDigits) << setfill('0') << imageIdx;
-		string image = imgPath + imgName + ss.str() + imgEnding;
+		string image = imgPath + imgName + ss.str() + imgType;
 		// Loading the img
 		mIn[i] = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
 		if (mIn[i].data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }

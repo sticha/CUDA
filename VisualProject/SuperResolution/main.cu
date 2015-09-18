@@ -35,7 +35,7 @@ const int stdNumImgs = 2;
 const int stdStartImg = 1;
 
 // uncomment to use the camera
-//#define CAMERA
+// #define CAMERA
 
 
 // The difference d_b = d_u2 - d_u1
@@ -245,25 +245,22 @@ int main(int argc, char **argv)
 	camera.set(CV_CAP_PROP_FRAME_WIDTH, camW);
 	camera.set(CV_CAP_PROP_FRAME_HEIGHT, camH);
 	// read in first frame to get the dimensions
-	cv::Mat mIn;
-	camera >> mIn;
-
-	// Load the input image using opencv (load as grayscale if "gray==true", otherwise as is (may be color or grayscale))
-	cv::Mat mIn = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
-	// check
-	if (mIn.data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
-
+	cv::Mat mIn1, mIn2;
+	camera >> mIn1;
+	camera >> mIn2;
 	// convert to float representation (opencv loads image values as single bytes by default)
-	mIn.convertTo(mIn, CV_32F);
+	mIn1.convertTo(mIn1, CV_32F);
+	mIn2.convertTo(mIn2, CV_32F);
 	// convert range of each channel to [0,1] (opencv default is [0,255])
-	mIn /= 255.f;
+	mIn1 /= 255.f;
+	mIn2 /= 255.f;
 	// get image dimensions
-	int w = mIn.cols;         // width
-	int h = mIn.rows;         // height
-	int nc = mIn.channels();  // number of channels
-	cout << "image: " << w << " x " << h << endl;
+	int w = mIn1.cols;         // width
+	int h = mIn1.rows;         // height
+	int nc = mIn1.channels();  // number of channels
+	
 
-#endif
+#else
 	// Load all of the images needed
 	cv::Mat * mIn = new cv::Mat[numImgs];
 	for (int i = 0; i < numImgs; i++){
@@ -284,12 +281,13 @@ int main(int argc, char **argv)
 	int w = mIn[0].cols;
 	int h = mIn[0].rows;
 	int nc = mIn[0].channels();
-
+#endif
+	cout << "image: " << w << " x " << h << endl;
 
 	// Set the output image format
 #ifdef CAMERA
-	cv::Mat mOut(h, w, mIn.type());  // mOut will have the same number of channels as the input image, nc layers
-	//cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
+	//cv::Mat mOut(h, w, mIn.type());  // mOut will have the same number of channels as the input image, nc layers
+	cv::Mat mOut((h + 2 * colorBorder), (w + 2 * colorBorder), CV_32FC3);    // mOut will be a color image, 3 layers
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
 	// ### Define your own output images here as needed
 #else
@@ -308,7 +306,8 @@ int main(int argc, char **argv)
 	// output image number of channels: mOut.channels(), as defined above (nc, 3, or 1)
 #ifdef CAMERA
 	// allocate raw input image array
-	float *imgIn = new float[(size_t)w*h*nc];
+	float *imgIn1 = new float[(size_t)w*h*nc];
+	float *imgIn2 = new float[(size_t)w*h*nc];
 #else
 	// Allocate space for an arbitary amount of images
 	float **imgIn = new float*[numImgs];
@@ -330,20 +329,31 @@ int main(int argc, char **argv)
 	// returns a value <0 if no key is pressed during this time, returns immediately with a value >=0 if a key is pressed
 	while (cv::waitKey(30) < 0)
 	{
+		float * temp = imgIn1;
+		imgIn1 = imgIn2;
+		imgIn2 = temp;
 		// Get camera image
-		camera >> mIn;
+		camera >> mIn2;
 		// convert to float representation (opencv loads image values as single bytes by default)
-		mIn.convertTo(mIn, CV_32F);
+		mIn2.convertTo(mIn2, CV_32F);
 		// convert range of each channel to [0,1] (opencv default is [0,255])
-		mIn /= 255.f;
+		mIn2 /= 255.f;
 
 
 		// Init raw input image array
 		// opencv images are interleaved: rgb rgb rgb...  (actually bgr bgr bgr...)
 		// But for CUDA it's better to work with layered images: rrr... ggg... bbb...
 		// So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
-		convert_mat_to_layered(imgIn, mIn);
-#endif
+		convert_mat_to_layered(imgIn2, mIn2);
+
+		Timer timer; timer.start();
+		// Call the CUDA computation
+		calculateFlow(imgIn1, imgIn2, v1, v2, imgOut, gamma, iterations, w, h, nc, colorBorder);
+
+		timer.end();  float t = timer.get();  // elapsed time in seconds
+		cout << "time: " << t * 1000 << " ms" << endl;
+
+#else
 		// Convert all images
 		for (int i = 0; i < numImgs; i++) {
 			convert_mat_to_layered(imgIn[i], mIn[i]);
@@ -355,7 +365,7 @@ int main(int argc, char **argv)
 
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;
-
+#endif
 
 
 
@@ -363,7 +373,9 @@ int main(int argc, char **argv)
 
 		// show input image
 #ifdef CAMERA
-		showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
+		convert_layered_to_mat(mIn1,imgIn1);
+		showImage("In1", mIn1, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
+		showImage("In2", mIn2, 100, 100 + h + 40);
 #else
 		showImage("Input1", mIn[0], 100, 100);
 		showImage("Input2", mIn[1], 100, 100);
@@ -395,10 +407,16 @@ int main(int argc, char **argv)
 		cv::imwrite("image_V1.png", v1*255.f);
 		cv::imwrite("image_V2.png", v2*255.f);
 #endif
+
+#ifdef CAMERA
+		delete[] imgIn1;
+		delete[] imgIn2;
+#else
 		// free allocated arrays
 		delete[] imgIn;
+#endif
 		delete[] imgOut;
-
+		
 		// close all opencv windows
 		cvDestroyAllWindows();
 		return 0;

@@ -197,7 +197,7 @@ int main(int argc, char **argv)
 	cout << "gray: " << gray << endl;
 
 	// ### Define your own parameters here as needed    
-	float gamma = 0.1f;
+	float gamma = 10.f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
 

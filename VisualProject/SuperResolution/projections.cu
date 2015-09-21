@@ -14,5 +14,9 @@ __device__ float2 projD(float2 x) {
 }
 
 __device__ float projC(float x, float gamma) {
-	return (x <= gamma ? x : gamma);
+	if (x < -gamma)
+		return -gamma;
+	if (x> gamma)
+		return gamma;
+	return x;
 }

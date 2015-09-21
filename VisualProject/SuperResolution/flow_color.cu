@@ -127,11 +127,14 @@ __global__ void createColorCoding(float* d_v1, float* d_v2, float* d_out, int w,
 	// index for access image pixel inside image without border
 	int idx = (x-border) + (w-2*border) * (y-border);
 
+	// scale factor
+	float scale = 0.4f;
+
 	// compute vector length
 	float v1, v2;
 	if (x < border || x >= w - border || y < border || y >= h - border) {
-		v1 = (x - w / 2.0f) / (fminf(w, h) / 10.0f);
-		v2 = (y - h / 2.0f) / (fminf(w, h) / 10.0f);
+		v1 = (x - w / 2.0f) / (fminf(w, h) * scale / 3.0f);
+		v2 = (y - h / 2.0f) / (fminf(w, h) * scale / 3.0f);
 	} else {
 		v1 = d_v1[idx];
 		v2 = d_v2[idx];
@@ -143,7 +146,7 @@ __global__ void createColorCoding(float* d_v1, float* d_v2, float* d_out, int w,
 		float angle = d_getAngleFromVector(v1, v2 / v_len);
 
 		// use weighted v_len for speed
-		v_len *= 0.3f;
+		v_len *= scale;
 
 		// get color index and color interpolant
 		float colorInterp = angle * 3 / PI;
@@ -188,11 +191,14 @@ __global__ void createColorCoding(float* d_in, float* d_v1, float* d_v2, float* 
 	// index for access image pixel inside image without border
 	int idx = (x - border) + wfree * (y - border);
 
+	// scale factor
+	float scale = 0.4f;
+
 	// compute vector length
 	float v1, v2;
 	if (isBorder) {
-		v1 = (x - w / 2.0f) / (fminf(w, h) / 10.0f);
-		v2 = (y - h / 2.0f) / (fminf(w, h) / 10.0f);
+		v1 = (x - w / 2.0f) / (fminf(w, h) * scale / 3.0f);
+		v2 = (y - h / 2.0f) / (fminf(w, h) * scale / 3.0f);
 	} else {
 		v1 = d_v1[idx];
 		v2 = d_v2[idx];
@@ -215,7 +221,7 @@ __global__ void createColorCoding(float* d_in, float* d_v1, float* d_v2, float* 
 		float angle = d_getAngleFromVector(v1, v2 / v_len);
 
 		// use weighted v_len for speed
-		v_len *= 0.4f;
+		v_len *= scale;
 
 		// get color index and color interpolant
 		float colorInterp = angle * 3 / PI;

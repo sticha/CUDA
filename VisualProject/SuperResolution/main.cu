@@ -127,7 +127,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 	// Calculate A
-	calculateGradient<<<grid3d, block3d>>>(d_u2, d_A, w, h, nc);
+	calculateGradientCD<<<grid3d, block3d>>>(d_u2, d_A, w, h, nc);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 	float sigmaQ = 0.5f;
@@ -404,9 +404,9 @@ int main(int argc, char **argv)
 
 		// ### Display your own output images here as needed
 		convert_layered_to_mat(mV1, v1);
-		showImage("V1", mV1, 100 +  2 * w + 80, 100);
+		showImage("V1", (mV1 + 1.0f) / 2.0f, 100 +  2 * w + 80, 100);
 		convert_layered_to_mat(mV2, v2);
-		showImage("V2", mV2, 100 + 3 * w + 120, 100);
+		showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + 3 * w + 120, 100);
 
 #ifdef CAMERA
 		// end of camera loop

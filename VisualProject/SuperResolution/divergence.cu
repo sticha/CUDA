@@ -1,5 +1,36 @@
 #include "divergence.h"
 
+__global__ void calculateGradientCD(float* d_u, float2* d_v, int w, int h, int nc) {
+	int x = threadIdx.x + blockDim.x * blockIdx.x;
+	int y = threadIdx.y + blockDim.y * blockIdx.y;
+	int c = threadIdx.z;
+
+	if (x >= w || y >= h || c >= nc) return;
+	int ind = x + y*w + c*w*h;
+
+	float2 grad = gradientCD(d_u, x, y, c, w, h);
+	d_v[ind] = grad;
+}
+
+__device__ float2 gradientCD(float* d_u, int x, int y, int c, int w, int h) {
+	int ind = x + y*w + c*w*h;
+	float2 ret;
+
+	if (x == w - 1 || x == 0) {
+		ret.x = 0.f;
+	} else {
+		ret.x = (d_u[ind + 1] - d_u[ind - 1]) / 2.0f;
+	}
+
+	if (y == h - 1 || y == 0) {
+		ret.y = 0.f;
+	} else {
+		ret.y = (d_u[ind + w] - d_u[ind - w]) / 2.0f;
+	}
+
+	return ret;
+}
+
 __global__ void calculateGradient(float* d_u, float2* d_v, int w, int h, int nc) {
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
 	int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -36,15 +67,13 @@ __device__ float2 gradient(float* d_u, int x, int y, int c, int w, int h) {
 
 	if (x == w - 1) {
 		ret.x = 0.f;
-	}
-	else {
+	} else {
 		ret.x = d_u[ind + 1] - d_u[ind];
 	}
 
 	if (y == h - 1) {
 		ret.y = 0.f;
-	}
-	else {
+	} else {
 		ret.y = d_u[ind + w] - d_u[ind];
 	}
 
@@ -62,9 +91,13 @@ __device__ float divergence(float2* d_q, int x, int y, int w, int h) {
 
 	if (x > 0) {
 		ret += d_q[ind].x - d_q[ind - 1].x;
+	} else {
+		ret += d_q[ind].x;
 	}
 	if (y > 0) {
 		ret += d_q[ind].y - d_q[ind - w].y;
+	} else {
+		ret += d_q[ind].y;
 	}
 
 	return ret;

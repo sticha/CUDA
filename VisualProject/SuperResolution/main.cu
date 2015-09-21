@@ -137,7 +137,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 		updateQ<<<grid2d, block2d>>>(d_q2, d_v2, sigmaQ, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, w, h);
+		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, w, h, nc);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 	}
@@ -271,7 +271,7 @@ int main(int argc, char **argv)
 		string image = imgPath + imgName + ss.str() + imgType;
 		// Loading the img
 		mIn[i] = cv::imread(image.c_str(), (gray ? CV_LOAD_IMAGE_GRAYSCALE : -1));
-		if (mIn[i].data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
+		if (mIn[i].data == NULL) { cerr << "ERROR: Could not load image " << image << endl; system("pause"); return 1; }
 		// convert to float representation (opencv loads image values as single bytes by default)
 		mIn[i].convertTo(mIn[i], CV_32F);
 		// convert range of each channel to [0,1] (opencv default is [0,255])
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
 		cv::imwrite("image_V1.png", v1*255.f);
 		cv::imwrite("image_V2.png", v2*255.f);
 #endif
-
+		
 #ifdef CAMERA
 		delete[] imgIn1;
 		delete[] imgIn2;

@@ -70,7 +70,7 @@ __global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	d_q[idx] = make_float2(2 * acc.x - qold.x, 2 * acc.y - qold.y);
 }
 
-__global__ void updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, float2* d_q2, float2* d_A, int w, int h) {
+__global__ void updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, float2* d_q2, float2* d_A, int w, int h, int nc) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
 	int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -90,20 +90,25 @@ __global__ void updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, floa
 	float div_q1 = divergence(d_q1, x, y, w, h);
 	// div(q2_k+1)
 	float div_q2 = divergence(d_q2, x, y, w, h);
-	// p_k+1
-	float p1 = d_p[idx];
-	float p2 = d_p[idx + w*h];
-	float p3 = d_p[idx + 2 * w*h];
-	// A
-	float2 A1 = d_A[idx];
-	float2 A2 = d_A[idx + w*h];
-	float2 A3 = d_A[idx + 2 * w*h];
+
 	// A * p_k+1 - (div(q1_k+1) div(q2_k+1))
-	float acc1 = A1.x * p1 + A2.x * p2 + A3.x * p3 - div_q1;
-	float acc2 = A1.y * p1 + A2.y * p2 + A3.y * p3 - div_q2;
+	float acc1 = -div_q1;
+	float acc2 = -div_q2;
 	// t
-	float tau1 = 1.0f / (4.0f + abs(A1.x) + abs(A2.x) + abs(A3.x));
-	float tau2 = 1.0f / (4.0f + abs(A1.y) + abs(A2.y) + abs(A3.y));
+	float tau1 = 4.0f;
+	float tau2 = 4.0f;
+	for (int i = 0; i < nc; i++) {
+		int cIdx = idx + i * w * h;
+		float p = d_p[cIdx];
+		float2 A = d_A[cIdx];
+		acc1 += p * A.x;
+		acc2 += p * A.y;
+		tau1 += abs(A.x);
+		tau2 += abs(A.y);
+	}
+	tau1 = 1.0f / tau1;
+	tau2 = 1.0f / tau2;
+
 	// v_k - t * (A * p_k+1 - (div(q1_k+1) div(q2_k+1)))
 	d_v1[idx] -= tau1 * acc1;
 	d_v2[idx] -= tau2 * acc2;

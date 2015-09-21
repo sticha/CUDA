@@ -1,0 +1,139 @@
+\documentclass[A4,12pt]{article}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage[nooneline]{subfigure}
+\usepackage{graphicx}
+\usepackage{varwidth}
+\usepackage{float}
+\usepackage{fullpage} 
+\usepackage{color}
+\usepackage{nicefrac}
+\usepackage{epstopdf}
+
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{prop}[thm]{Proposition}
+\newtheorem{lemma}[thm]{Lemma}
+\newtheorem{cor}[thm]{Corollary}
+\newtheorem{rem}[thm]{Remark}
+\newtheorem{defi}[thm]{Definition}
+\newtheorem{example}{Example}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\divop}{div}
+\DeclareMathOperator*{\proj}{proj}
+
+\newcommand\M{\mathcal{M}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Rext}{\mathbb{R} \cup \{ \infty \} }
+\newcommand{\rslv}[1]{(I + #1)^{-1}}
+\newcommand{\norm}[1]{\Vert #1 \Vert}
+\newcommand{\abs}[1]{\vert #1 \vert}
+\newcommand\MyGreenBox[1]{%
+\colorbox{green}{\begin{varwidth}{\dimexpr\linewidth-2\fboxsep}#1\end{varwidth}}}
+\providecommand{\iprod}[2]{\langle#1,#2\rangle}
+
+
+
+\title{Joint Super-Resolution and Optical Flow Estimation}
+%\author{Thomas M\"ollenhoff}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Energy Functional}
+Let $\Omega_l \subset \R$ be a discretized rectangular domain with $w \times h$ pixels and $\Omega_h \subset \R$ a domain with $W \times H$ pixels. Let $f_1, \cdots, f_n : \Omega_l \rightarrow \R^k$ be low resolution color input images with $k$ color channels. We seek to jointly estimate high resolution images $u_1, \cdots, u_n : \Omega_h \rightarrow \R^k$ and optical flow fields $v_1, \cdots, v_{n-1} : \Omega_h \rightarrow \R^2$ from the low resolution images.
+
+We model the problem in terms of energy minimization of the following functional:
+\begin{equation}
+  E(u, v) = \sum_{i=1}^n \alpha \norm{Au_i - f_i}_{1} + \beta TV(u_i) + \gamma \sum_{i=1}^{n-1} \underset{x \in \Omega_h} \sum || u_i(x) - u_{i+1}(x + v_i(x)) ||_1 + TV(v_i^1) + TV(v_i^2) 
+\end{equation}
+
+Here $A : (\Omega_h \rightarrow \R^k) \rightarrow (\Omega_l \rightarrow \R^k)$ is a linear operator which maps a high-resolution image to a low resolution image by blurring it with a gaussian kernel and downsampling it.
+
+$TV(u) := \underset{x \in \Omega} \sum \norm{\nabla u(x)}_2$ denotes the TV regularizer.
+
+\section{Optimization}
+Since the energy is hard to minimize jointly in $u$ and $v$ we employ a block-coordinate descent approach:
+
+\begin{equation}
+\begin{aligned}
+&v^{k+1} = \underset{v} \argmin ~ E(u^{k}, v),\\
+&u^{k+1} = \underset{u} \argmin ~ E(u, v^{k+1}).
+\end{aligned}
+\end{equation}
+
+\subsection{Solving the Problem in $v$ (TV-L1 Optical Flow).}
+For fixed $u^k$ the problem reads:
+\begin{equation}
+  v^{k+1} = \underset{v} \argmin ~ \gamma
+\underset{x \in \Omega_h} \sum \sum_{i=1}^{n-1} || u_i^k(x) - u_{i+1}^k(x + v_i(x)) ||_1 + TV(v_i^1) + TV(v_i^2) 
+\end{equation}
+For simplicity, we first consider the case $n=2$:
+\begin{equation}
+  v^{k+1} = \underset{v} \argmin ~  
+\gamma \underset{x \in \Omega_h} \sum || u_i^k(x) - u_{i+1}^k(x + v_i(x)) ||_1 + TV(v_i^1) + TV(v_i^2) 
+\end{equation}
+This energy is nonconvex in $v$, due to the first term. Thus we linearize it using the first order Taylor expansion,
+$$
+|| u_i^k(x) - u_{i+1}^k(x + v_i(x)) ||_1 \approx || u_1^k(x) - u_2^k(x) - \nabla u_2^k(x)^T v_i(x) ||_1, 
+$$
+and end up at the following convex problem:
+\begin{equation}
+  v^{k+1} = \underset{v} \argmin ~ \gamma  
+\underset{x \in \Omega_h} \sum || \underbrace{u_1^k(x) - u_2^k(x)}_{=:-b(x)} - \underbrace{\nabla u_2^k(x)^T v(x)}_{=:(Av)(x) } ||_1 + TV(v^1) + TV(v^2),
+\label{eq:flow}
+\end{equation}
+where $v=(v^1, v^2)$.
+\subsubsection{Primal-Dual Optimization}
+Since the energy is non-differentiable, a gradient descent based approach does not work. We employ the primal-dual algorithm described in \cite{Chambolle-Pock-jmiv11,Pock-Chambolle-iccv11} to minimize the energy. First, we rewrite \eqref{eq:flow} as an equivalent saddle-point problem:
+\begin{equation}
+\min_{v} \max_{p \in C,q_1 \in D,q_2 \in D} ~ \iprod{p}{Av + b} + \iprod{q_1}{\nabla v^1} + \iprod{q_2}{\nabla v^2}
+\end{equation}
+The update equations for the algorithm then read:
+\begin{equation}
+\begin{aligned}
+p^{k+1}(x)&=\proj_C(p^k(x) + \sigma_p(x) ((Av^k)(x) + b(x))) \\
+q_1^{k+1}(x)&=\proj_D(q_1^k(x) + \sigma_q (\nabla v_1^k)(x)),\\
+q_2^{k+1}(x)&=\proj_D(q_2^k(x) + \sigma_q (\nabla v_2^k)(x)),\\
+\bar p^{k+1}(x)&=2 p^{k+1} - p^k,\\
+\bar q_1^{k+1}(x)&=2 q_1^{k+1} - q_1^k,\\
+\bar q_2^{k+1}(x)&=2 q_2^{k+1} - q_2^k,\\
+v^{k+1}(x)&=v^k - \tau(x) ((A^T \bar p^{k+1})(x) - (\divop \bar q_1^{k+1})(x) - (\divop \bar q_2^{k+1})(x) ).
+\end{aligned}
+\end{equation}
+The sets $C$ and $D$ are defined as
+\begin{equation}
+\begin{aligned}
+& C = \{x \in \R ~|~ |x| \leq \gamma \}, \\
+& D = \{x \in \R^{2 n_c} ~|~ \norm{x}_2 \leq 1 \}, 
+\end{aligned}
+\end{equation}
+and the projections $\proj_C$, $\proj_D$ can be implemented as an orthogonal projection on a sphere. Only project if you lie outside of the constraint.
+
+The step sizes are chosen according to the scheme described in \cite{Pock-Chambolle-iccv11} (see Lemma 2, equation 10, we set $\alpha=1$):
+\begin{equation}
+  \begin{aligned}
+    &\sigma_p(x) = \frac{1}{\sum_j |A(x,j)|}, \\
+    &\sigma_q = \frac{1}{2},\\
+    &\tau(x) = \frac{1}{2 + 2 + \sum_i |A(i,x)|},
+  \end{aligned}
+\end{equation}
+where $A(x,j)$ denotes the element in row $x$ and column $j$.
+
+Allocate memory for the variables $p \in \R^{w*h*n_c},q_1 \in \R^{w*h*2*n_c},q_2 \in \R^{w*h*2*n_c},\bar p, \bar q_1, \bar q_2, v \in \R^{w*h*2*n_c}$ as {\tt float} arrays and implement CUDA kernels for the update equations of the primal-dual algorithm. One kernel should perform the update in $p, q_1, q_2$ and do the overrelaxation, the other kernel should do the update in $v$. 
+
+\subsection{Solving the Problem in $u$.}
+To be discussed at a later point.
+% For fixed $v^{k+1}$, the energy minimization in $u$ reads:
+% \begin{equation}
+%   u^{k+1} = \underset{u} \argmin ~ \sum_{i=1}^n \norm{Au_i - f_i}_{2,1} + TV(u_i) + \sum_{i=1}^{n-1} || u_i - B u_{i+1} ||_{2,1},
+% \end{equation}
+% where $B : (\Omega_h \rightarrow \R^k) \rightarrow (\Omega_h \rightarrow \R^k)$ is a warping operator, which can be constructed from $v^{k+1}$.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+
+\end{document}

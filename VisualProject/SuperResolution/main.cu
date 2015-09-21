@@ -21,6 +21,7 @@
 #include "projections.h"
 #include "update.h"
 #include "flow_color.h"
+#include "energy.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -58,7 +59,7 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
  */
 void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float gamma, int iterations, int w, int h, int nc, int colorBorder) {
 	// Allocate GPU memory
-	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p, *d_out;
+	float* d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p, *d_out, *d_energy;
 	float2* d_A, *d_q1, *d_q2;
 	size_t n = w*h*nc;
 	int wborder = w + 2 * colorBorder;
@@ -83,6 +84,8 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	CUDA_CHECK;
 	cudaMalloc(&d_out, wborder*hborder * 3 * sizeof(float));
 	CUDA_CHECK;
+	cudaMalloc(&d_energy, sizeof(float));
+	CUDA_CHECK;
 
 	// Copy images to GPU
 	cudaMemcpy(d_u1, u1, n * sizeof(float), cudaMemcpyHostToDevice);
@@ -106,13 +109,16 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	CUDA_CHECK;
 
 
-
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
 	
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
+
+	dim3 block1d = dim3(32, 1, 1);
+	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
+	int bytesSM1d = block1d.x * sizeof(float);
 
 	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
 
@@ -140,6 +146,16 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 		updateV<<<grid2d, block2d>>>(d_v1, d_v2, d_p, d_q1, d_q2, d_A, w, h, nc);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
+
+		cudaMemset(d_energy, 0, sizeof(float));
+		CUDA_CHECK;
+		flowFieldEnergy<<<grid1d, block1d, bytesSM1d>>>(d_energy, d_A, d_b, d_v1, d_v2, gamma, w, h, nc);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		float energy;
+		cudaMemcpy(&energy, d_energy, sizeof(float), cudaMemcpyDeviceToHost);
+		CUDA_CHECK;
+		cout << "Flow field energy in iteration " << i << ": " << energy << endl;
 	}
 
 	createColorCoding<<<grid2dborder, block2d>>>(d_v1, d_v2, d_out, wborder, hborder, colorBorder);
@@ -166,6 +182,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	cudaFree(d_q1);
 	cudaFree(d_q2);
 	cudaFree(d_out);
+	cudaFree(d_energy);
 	CUDA_CHECK;
 }
 

@@ -5,6 +5,6 @@
 
 #define EPSILON 0.0001
 
-__global__ void flowFieldEnergy(float* result, float* d_A, float* d_b, float* d_v1, float* d_v2, float gamma, int w, int h, int nc);
+__global__ void flowFieldEnergy(float* result, float2* d_A, float* d_b, float* d_v1, float* d_v2, float gamma, int w, int h, int nc);
 
 #endif

@@ -36,7 +36,7 @@
 
 
 \title{Joint Super-Resolution and Optical Flow Estimation}
-%\author{Thomas M\"ollenhoff}
+%\author{Thomas M\"ollenhoff, Philipp Kr\"uger, Sebastian K\"umper \and Jonas Sticha}
 \date{}
 
 \begin{document}
@@ -125,7 +125,59 @@ where $A(x,j)$ denotes the element in row $x$ and column $j$.
 Allocate memory for the variables $p \in \R^{w*h*n_c},q_1 \in \R^{w*h*2*n_c},q_2 \in \R^{w*h*2*n_c},\bar p, \bar q_1, \bar q_2, v \in \R^{w*h*2*n_c}$ as {\tt float} arrays and implement CUDA kernels for the update equations of the primal-dual algorithm. One kernel should perform the update in $p, q_1, q_2$ and do the overrelaxation, the other kernel should do the update in $v$. 
 
 \subsection{Solving the Problem in $u$.}
-To be discussed at a later point.
+\begin{equation}
+\begin{aligned}
+u_i^{k+1}&=u_i^k-\tau_i(A^T\bar p_i^{k+1}-div(\bar q_i^{k+1})+B^T\bar r^{k+1}) , \\
+\\
+q_i^{k+1}&=\proj_E(q_i^k + \sigma_q (\nabla u_i)), \\
+p_i^{k+1}&=\proj_F(p_i^k + \sigma_p (Au_i^k - f_i)), \\
+r^{k+1}&=\proj_G(r^{k+1} + \sigma_r B\begin{pmatrix}u_1^k \\ u_2^k\end{pmatrix}), \\
+\bar q_i^{k+1}&=2q_i^{k+1}-q_i^k; \quad \bar p_i^{k+1},\quad \textrm{and} \quad \bar r^{k+1} analogously \\
+\end{aligned}
+\end{equation}
+\\
+\begin{equation}
+\begin{aligned}
+\sigma_q &= \frac{1}{2}, \\
+\sigma_p &= 1, \\
+\tau_i&=\frac{1}{1+4+?(x)}, \\
+?(x)&=\begin{cases} 1 & i=1 \\ 1+|(v/u?)^1(x)|*2+|(v/u?)^2(x)|*2 & i \geq 2 \end{cases} \\
+\sigma_r (x_{(ijc)}) &= \frac{1}{2+2|(u/v?)^1(x_{(ij)})|+2|(u/v?)^2(x)|} \\
+\end{aligned}
+\end{equation}
+\\
+\begin{equation}
+\begin{aligned}
+B&=\begin{pmatrix}I, &-I-(u/v?)^1\delta_x-(u/v?)^2\delta_y\end{pmatrix}, \\
+B^T&=\begin{pmatrix}I \\ -I+\underset{dirichlet^x} {bw\_diff} (u/v?)^1+\underset{dirichlet^y} {bw\_diff} (u/v?)^2\end{pmatrix}, \\
+A&=DB, \\
+A^T&=BD^T \\
+\end{aligned}
+\end{equation}
+\\
+\begin{equation}
+\begin{aligned}
+E &= \{x \in \R ~|~ \norm{x}_2 \leq \beta \}, \\
+F &= \{x \in \R ~|~ |x| \leq \alpha \}, \\
+G &= \{x \in \R ~|~ |x| \leq \gamma \} \\
+\end{aligned}
+\end{equation}
+\\
+\begin{equation}
+\begin{aligned}
+\delta_x&=D_x=\begin{pmatrix}1 & -1 & \\ & \ddots & \\ & & \ddots \end{pmatrix}, \\
+v_x&=\begin{pmatrix}v_x(?,?)& & & \\ & \ddots & & \\ & & \ddots & \\ & & & v_x(?,?) \end{pmatrix}  \\
+\end{aligned}
+\end{equation}
+\\
+\begin{equation}
+\begin{aligned}
+A&\colon\R^{W*H*c}\mapsto\R^{w*h*c}, \\
+B_{flow}&\colon\R^{2*W*H*c}\mapsto\R^{W*H*c}, \\
+B_l&\colon\R^{W*H*c}\mapsto\R^{W*H*c}, \\
+D&\colon\R^{W*H*c}\mapsto\R^{w*h*c} \\
+\end{aligned}
+\end{equation}
 % For fixed $v^{k+1}$, the energy minimization in $u$ reads:
 % \begin{equation}
 %   u^{k+1} = \underset{u} \argmin ~ \sum_{i=1}^n \norm{Au_i - f_i}_{2,1} + TV(u_i) + \sum_{i=1}^{n-1} || u_i - B u_{i+1} ||_{2,1},

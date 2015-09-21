@@ -172,6 +172,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="divergence.cu" />
+    <CudaCompile Include="energy.cu" />
     <CudaCompile Include="flow_color.cu" />
     <CudaCompile Include="helper.cu" />
     <CudaCompile Include="main.cu" />
@@ -180,6 +181,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="divergence.h" />
+    <ClInclude Include="energy.h" />
     <ClInclude Include="flow_color.h" />
     <ClInclude Include="helper.h" />
     <ClInclude Include="projections.h" />

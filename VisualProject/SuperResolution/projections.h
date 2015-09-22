@@ -4,15 +4,13 @@
 #include <cuda_runtime.h>
 
 /**
- * Normale vector x if it is longer than 1
+ * Normale vector x if it is longer than the given limit
  */
-__device__ float2 projD(float2 x);
-__device__ float2 projL2(float2 x, float limit);
+__device__ float2 projL2(float2 x);
 
 /**
- * Clamp x to maximum value of gamma
+ * Clamp x to maximum/minimum value of the given limit
  */
-__device__ float projC(float x, float gamma);
 __device__ float projL1(float x, float limit);
-#endif
 
+#endif

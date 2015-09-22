@@ -37,7 +37,7 @@ __global__ void updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float
 	float oldp = d_p[idxc];
 	acc = oldp + sigma * acc;
 	// proj_C(p_k + s * (Av + b))
-	acc = projC(acc, gamma);
+	acc = projL1(acc, gamma);
 	// sor: p_k+1 = 2 * p_k+1' - p_k
 	d_p[idxc] = 2 * acc - oldp;
 }
@@ -65,7 +65,7 @@ __global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	float2 qold = d_q[idx];
 	acc = make_float2(qold.x + sigma * acc.x, qold.y + sigma * acc.y);
 	// proj_D(q_k + s * (dv/dx dv/dy))
-	acc = projD(acc);
+	acc = projL2(acc);
 	// sor: q_k+1 = 2 * q_k+1' - q_k
 	d_q[idx] = make_float2(2 * acc.x - qold.x, 2 * acc.y - qold.y);
 }

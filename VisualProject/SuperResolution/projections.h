@@ -6,7 +6,7 @@
 /**
  * Normale vector x if it is longer than the given limit
  */
-__device__ float2 projL2(float2 x);
+__device__ float2 projL2(float2 x, float limit);
 
 /**
  * Clamp x to maximum/minimum value of the given limit

@@ -65,7 +65,7 @@ __global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	float2 qold = d_q[idx];
 	acc = make_float2(qold.x + sigma * acc.x, qold.y + sigma * acc.y);
 	// proj_D(q_k + s * (dv/dx dv/dy))
-	acc = projL2(acc);
+	acc = projL2(acc, 1.f);
 	// sor: q_k+1 = 2 * q_k+1' - q_k
 	d_q[idx] = make_float2(2 * acc.x - qold.x, 2 * acc.y - qold.y);
 }

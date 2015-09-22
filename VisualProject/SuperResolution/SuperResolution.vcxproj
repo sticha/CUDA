@@ -175,17 +175,21 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <CudaCompile Include="energy.cu" />
     <CudaCompile Include="flow_color.cu" />
     <CudaCompile Include="helper.cu" />
+    <CudaCompile Include="imageTransform.cu" />
     <CudaCompile Include="main.cu" />
     <CudaCompile Include="projections.cu" />
     <CudaCompile Include="update.cu" />
+    <CudaCompile Include="updateSuperResolution.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="divergence.h" />
     <ClInclude Include="energy.h" />
     <ClInclude Include="flow_color.h" />
     <ClInclude Include="helper.h" />
+    <ClInclude Include="imageTransform.h" />
     <ClInclude Include="projections.h" />
     <ClInclude Include="update.h" />
+    <ClInclude Include="updateSuperResolution.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

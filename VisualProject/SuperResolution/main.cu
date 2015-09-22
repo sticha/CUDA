@@ -52,6 +52,49 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
 	d_b[idx] = d_u2[idx] - d_u1[idx];
 }
 
+void calculateSuperResolution(int w, int h, int w_small, int h_small, int nc, float* f1, float* f2, float* out_u1, float* out_u2) {
+	float* d_u1, *d_u2, *d_v1, *d_v2, *d_p1, *d_p2, *d_r, *d_f1, *d_f2;
+	float2* d_q1, *d_q2;
+	int n = w*h*nc;
+	int n_small = w_small*h_small*nc;
+
+	cudaMalloc(&d_u1, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_u2, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_v1, w*h*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_v2, w*h*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_f1, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_f2, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_p1, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_p2, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_r, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_q1, n*sizeof(float2));
+	CUDA_CHECK;
+	cudaMalloc(&d_q2, n*sizeof(float2));
+	CUDA_CHECK;
+	//TODO
+
+	// Free GPU Memory
+	cudaFree(d_u1);
+	cudaFree(d_u2);
+	cudaFree(d_v1);
+	cudaFree(d_v2);
+	cudaFree(d_f1);
+	cudaFree(d_f2);
+	cudaFree(d_p1);
+	cudaFree(d_p2);
+	cudaFree(d_r);
+	cudaFree(d_q1);
+	cudaFree(d_q2);
+}
 
 /**
  * u1, u2, are input images with size w*h*nc

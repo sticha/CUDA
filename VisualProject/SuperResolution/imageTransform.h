@@ -13,10 +13,11 @@
 __device__ void downsample(int x, int y, int c, float* in, int w, int h, float* out);
 
 /**
- *Doubles width and height of the input image,
- *analogously to the downsample function
- * x and y for the input (big) image, w, h and nc of the input (small) image
+ * To be called with one thread per pixel of the output (big) image!
+ * Doubles width and height of the input image,
+ * analogously to the downsample function
+ * w, h and nc of the input (small) image
 **/
-__device__ void upsample(int x, int y, int c, float* in, int w, int h, float* out);
+__global__ void upsample(float* in, float* out, int w, int h);
 
 #endif

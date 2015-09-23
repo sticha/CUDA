@@ -20,6 +20,7 @@
 #include "divergence.h"
 #include "projections.h"
 #include "update.h"
+#include "updateSuperResolution.h"
 #include "flow_color.h"
 #include "energy.h"
 #include <iostream>
@@ -52,7 +53,7 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
 	d_b[idx] = d_u2[idx] - d_u1[idx];
 }
 
-void calculateSuperResolution(int w, int h, int w_small, int h_small, int nc, float* f1, float* f2, float* out_u1, float* out_u2) {
+void calculateSuperResolution(int w, int h, int w_small, int h_small, int nc, float* f1, float* f2, float* out_u1, float* out_u2, int iterations, float alpha, float beta, float gamma, float* v1, float* v2) {
 	float* d_u1, *d_u2, *d_v1, *d_v2, *d_p1, *d_p2, *d_r, *d_f1, *d_f2;
 	float2* d_q1, *d_q2;
 	int n = w*h*nc;
@@ -80,7 +81,74 @@ void calculateSuperResolution(int w, int h, int w_small, int h_small, int nc, fl
 	CUDA_CHECK;
 	cudaMalloc(&d_q2, n*sizeof(float2));
 	CUDA_CHECK;
-	//TODO
+	
+	// Copy images to GPU
+	cudaMemcpy(d_f1, f1, n_small * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(d_f2, f2, n_small * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(d_v1, v1, w * h * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(d_v2, v2, w * h * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+
+	// initalize temporary data
+	cudaMemset(d_u1, 0, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_u2, 0, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_p1, 0, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_p2, 0, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_r, 0, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(d_q1, 0, n*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(d_q2, 0, n*sizeof(float2));
+	CUDA_CHECK;
+
+	// Calculate grid size
+	dim3 block3d = dim3(16, 16, nc);
+	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
+
+	dim3 block2d = dim3(16, 16, 1);
+	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
+
+	dim3 block1d = dim3(128, 1, 1);
+	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
+	int bytesSM1d = block1d.x * sizeof(float);
+
+	float sigmaP = 1.0f;
+	float sigmaQ = 0.5f;
+
+	for (int i = 0; i < iterations; i++) {
+		// Update p1, p2, q1, q2, r and u
+		super_updateP<<<grid3d, block3d>>>(d_p1, d_f1, sigmaP, alpha, w_small, h_small);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		super_updateP<<<grid3d, block3d>>>(d_p2, d_f2, sigmaP, alpha, w_small, h_small);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		super_updateQ<<<grid3d, block3d>>>(d_q1, d_u1, sigmaQ, beta, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		super_updateQ<<<grid3d, block3d>>>(d_q2, d_u2, sigmaQ, beta, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		super_updateR<<<grid3d, block3d>>>(d_r, d_u1, d_u2, d_v1, d_v2, gamma, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		super_updateU<<<grid3d, block3d>>>(d_u1, d_u2, d_r, d_p1, d_p2, d_q1, d_q2, d_v1, d_v2, gamma, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+	}
+
+	// Copy result to Host
+	cudaMemcpy(out_u1, d_u1, n * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaMemcpy(out_u2, d_u2, n * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
 
 	// Free GPU Memory
 	cudaFree(d_u1);
@@ -94,6 +162,7 @@ void calculateSuperResolution(int w, int h, int w_small, int h_small, int nc, fl
 	cudaFree(d_r);
 	cudaFree(d_q1);
 	cudaFree(d_q2);
+	CUDA_CHECK;
 }
 
 /**
@@ -159,7 +228,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
 
-	dim3 block1d = dim3(32, 1, 1);
+	dim3 block1d = dim3(128, 1, 1);
 	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
 	int bytesSM1d = block1d.x * sizeof(float);
 

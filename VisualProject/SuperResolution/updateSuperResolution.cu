@@ -8,6 +8,7 @@ __global__ void super_updateP(float * d_p, float * d_f, float sigma, float alpha
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
+	if (x >= w || y >= h) return;
 
 	int idx = x + y * w * h + c * w * h;
 
@@ -29,6 +30,7 @@ __global__ void super_updateQ(float2 * d_q, float * d_u, float sigma, float beta
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
+	if (x >= w || y >= h) return;
 
 	int idx = x + y * w * h + c * w * h;
 
@@ -49,6 +51,7 @@ __global__ void super_updateR(float * d_r, float * d_u1, float * d_u2, float * d
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
+	if (x >= w || y >= h) return;
 
 	int idx = x + y * w * h;
 	int idxc = idx + c * w * h;
@@ -79,6 +82,7 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
+	if (x >= w || y >= h) return;
 
 	int idx = x + y * w * h;
 	int idxc = idx + c * w * h;

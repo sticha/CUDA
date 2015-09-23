@@ -80,13 +80,13 @@ __device__ float2 gradient(float* d_u, int x, int y, int c, int w, int h) {
 	return ret;
 }
 
-__device__ void divergence(float* d_div, float2* d_q, int x, int y, int w, int h) {
-	int ind = x + y*w;
-	d_div[ind] = divergence(d_q, x, y, w, h);
+__device__ void divergence(float* d_div, float2* d_q, int x, int y, int w, int h, int c) {
+	int ind = x + y*w + w*h*c;
+	d_div[ind] = divergence(d_q, x, y, w, h, c);
 }
 
-__device__ float divergence(float2* d_q, int x, int y, int w, int h) {
-	int ind = x + y*w;
+__device__ float divergence(float2* d_q, int x, int y, int w, int h, int c) {
+	int ind = x + y*w + w*h*c;
 	float ret = 0.f;
 
 	if (x > 0) {

@@ -24,11 +24,7 @@ __global__ void upsample(float* in, float* out, int w, int h){
 
 	int ind_in = x/2 + y/2*w + w*h*c;
 	int ind_out = x + y * w_big + w_big * h_big * c;
-	if (x % 2 || y % 2){
-		out[ind_out] = 0.f;
-	} else {
-		out[ind_out] = in[ind_in];
-	}
+	out[ind_out] = in[ind_in];
 
 	//blurring has to be done at a later point, where global
 	//synchronization between all threads (of all blocks) can be ensured

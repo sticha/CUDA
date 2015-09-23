@@ -19,6 +19,7 @@
 #include "helper.h"
 #include "divergence.h"
 #include "projections.h"
+#include "imageTransform.h"
 #include "update.h"
 #include "updateSuperResolution.h"
 #include "flow_color.h"
@@ -83,16 +84,6 @@ void InitializeGPUData(float* f1, float* f2, Data data, int w, int h, int w_smal
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
 	size_t n = w*h*nc;
-	// Copy images to GPU
-	cudaMemcpy(data.d_f1, f1, n_small * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(data.d_f2, f2, n_small * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	// TODO: upsample f to u
-	cudaMemcpy(data.d_u1, f1, n * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(data.d_u2, f2, n * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
 	// Fill arrays with 0
 	cudaMemset(data.d_v1, 0, w*h*sizeof(float));
 	CUDA_CHECK;
@@ -108,6 +99,25 @@ void InitializeGPUData(float* f1, float* f2, Data data, int w, int h, int w_smal
 	CUDA_CHECK;
 	cudaMemset(data.d_q2, 0, w*h*sizeof(float2));
 	CUDA_CHECK;
+	// Copy images to GPU
+	cudaMemcpy(data.d_f1, f1, n_small * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(data.d_f2, f2, n_small * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	// Calculate grid size
+	dim3 block3d = dim3(16, 16, nc);
+	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
+	// Upsample f to u
+	upsample<<<grid3d, block3d>>>(data.d_f1, data.d_u1, w_small, h_small);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
+	upsample<<<grid3d, block3d>>>(data.d_f2, data.d_u2, w_small, h_small);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
+	//cudaMemcpy(data.d_u1, f1, n * sizeof(float), cudaMemcpyHostToDevice);
+	//CUDA_CHECK;
+	//cudaMemcpy(data.d_u2, f2, n * sizeof(float), cudaMemcpyHostToDevice);
+	//CUDA_CHECK;
 }
 
 void freeGPUMemory(Data& data) {
@@ -250,11 +260,7 @@ void calculateSuperResolution(Data data, int w, int h, int w_small, int h_small,
  * u1, u2, are input images with size w*h*nc
  * v1, v2, are vector components with size w*h describing the flow
  */
-void calculateFlow(Data data, float* v1, float* v2, float* out, float gamma, int iterations, int w, int h, int nc, int colorBorder) {
-	// helper values
-	int wborder = w + 2 * colorBorder;
-	int hborder = h + 2 * colorBorder;
-
+void calculateFlow(Data data, float gamma, int iterations, int w, int h, int nc) {
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
@@ -265,8 +271,6 @@ void calculateFlow(Data data, float* v1, float* v2, float* out, float gamma, int
 	dim3 block1d = dim3(128, 1, 1);
 	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
 	int bytesSM1d = block1d.x * sizeof(float);
-
-	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
 
 	// Calculate b 
 	imgDif<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_b, w, h);
@@ -303,6 +307,18 @@ void calculateFlow(Data data, float* v1, float* v2, float* out, float gamma, int
 		CUDA_CHECK;
 		cout << "Flow field energy in iteration " << i << ": " << energy << endl;
 	}
+}
+
+void getComputationResult(Data& data, float* v1, float* v2, float* flow, float* sr1, float* sr2, int w, int h, int nc, int colorBorder) {
+	// helper values
+	int wborder = w + 2 * colorBorder;
+	int hborder = h + 2 * colorBorder;
+
+	// Calculate grid size
+	dim3 block2d = dim3(16, 16, 1);
+	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
+
+	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
 
 	createColorCoding<<<grid2dborder, block2d>>>(data.d_v1, data.d_v2, data.d_out, wborder, hborder, colorBorder);
 	//createColorCoding<<<grid2dborder, block2d>>>(d_u1, d_v1, d_v2, d_out, wborder, hborder, nc, colorBorder);
@@ -314,7 +330,11 @@ void calculateFlow(Data data, float* v1, float* v2, float* out, float gamma, int
 	CUDA_CHECK;
 	cudaMemcpy(v2, data.d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
-	cudaMemcpy(out, data.d_out, wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(flow, data.d_out, wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaMemcpy(sr1, data.d_u1, w * h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaMemcpy(sr2, data.d_u2, w * h * nc * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 }
 
@@ -406,8 +426,8 @@ int main(int argc, char **argv)
 	// get image dimensions
 	int w_small = mIn1.cols;         // width of input image
 	int h_small = mIn1.rows;         // height of input image
-	int w = w_small;
-	int h = h_small;
+	int w = 2 * w_small;
+	int h = 2 * h_small;
 	int nc = mIn1.channels();  // number of channels
 	
 
@@ -431,8 +451,8 @@ int main(int argc, char **argv)
 	// Its's assumed width and height is the same for all Images
 	int w_small = mIn[0].cols;
 	int h_small = mIn[0].rows;
-	int w = w_small;
-	int h = h_small;
+	int w = 2 * w_small;
+	int h = 2 * h_small;
 	int nc = mIn[0].channels();
 #endif
 	cout << "image: " << w_small << " x " << h_small << endl;
@@ -440,13 +460,17 @@ int main(int argc, char **argv)
 	// Set the output image format
 #ifdef CAMERA
 	//cv::Mat mOut(h, w, mIn.type());  // mOut will have the same number of channels as the input image, nc layers
-	cv::Mat mOut((h + 2 * colorBorder), (w + 2 * colorBorder), CV_32FC3);    // mOut will be a color image, 3 layers
+	cv::Mat mFlow((h + 2 * colorBorder), (w + 2 * colorBorder), CV_32FC3);    // mOut will be a color image, 3 layers
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
 	// ### Define your own output images here as needed
+	cv::Mat mSR1(h, w, mIn.type());
+	cv::Mat mSR2(h, w, mIn.type());
 #else
 	//cv::Mat mOut(h, w, mIn[0].type());  // mOut will have the same number of channels as the input image, nc layers
-	cv::Mat mOut((h+2*colorBorder),(w+2*colorBorder),CV_32FC3);    // mOut will be a color image, 3 layers
+	cv::Mat mFlow((h+2*colorBorder),(w+2*colorBorder),CV_32FC3);    // mOut will be a color image, 3 layers
 	//cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
+	cv::Mat mSR1(h, w, mIn[0].type());
+	cv::Mat mSR2(h, w, mIn[0].type());
 #endif
 	cv::Mat mV1(h, w, CV_32FC1);
 	cv::Mat mV2(h, w, CV_32FC1);
@@ -469,10 +493,13 @@ int main(int argc, char **argv)
 	}
 #endif
 	// allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
-	float *imgOut = new float[(size_t)(w+2*colorBorder)*(h+2*colorBorder)*mOut.channels()];
+	float *imgFlow = new float[(size_t)(w+2*colorBorder)*(h+2*colorBorder)*mFlow.channels()];
 
-	float *v1 = new float[(size_t)w*h*mV1.channels()];
-	float *v2 = new float[(size_t)w*h*mV2.channels()];
+	float *imgV1 = new float[(size_t)w*h*mV1.channels()];
+	float *imgV2 = new float[(size_t)w*h*mV2.channels()];
+	float *imgSR1 = new float[(size_t)w*h*mSR1.channels()];
+	float *imgSR2 = new float[(size_t)w*h*mSR2.channels()];
+
 
 
 	// For camera mode: Make a loop to read in camera frames
@@ -527,9 +554,13 @@ int main(int argc, char **argv)
 
 
 		// Compute flow estimation
-		calculateFlow(data, v1, v2, imgOut, gamma, iterations, w, h, nc, colorBorder);
+		calculateFlow(data, gamma, iterations, w, h, nc);
 
 		// TODO: call calculation of super resolution
+		
+
+		// Get results from computation
+		getComputationResult(data, imgV1, imgV2, imgFlow, imgSR1, imgSR2, w, h, nc, colorBorder);
 
 		timer.end();  float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;
@@ -542,18 +573,20 @@ int main(int argc, char **argv)
 		showImage("In2", mIn2, 100, 100 + h + 40);
 #else
 		showImage("Input1", mIn[0], 100, 100);
-		showImage("Input2", mIn[1], 100, 100);
+		showImage("Input2", mIn[1], 100, 100 + h_small + 50);
 #endif
 		
-		// show output image: first convert to interleaved opencv format from the layered raw array
-		convert_layered_to_mat(mOut, imgOut);
-		showImage("ColorCoded", mOut, 100 + w + 40, 100);
-
 		// ### Display your own output images here as needed
-		convert_layered_to_mat(mV1, v1);
-		showImage("V1", (mV1 + 1.0f) / 2.0f, 100 +  2 * w + 80, 100);
-		convert_layered_to_mat(mV2, v2);
-		showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + 3 * w + 120, 100);
+		convert_layered_to_mat(mSR1, imgSR1);
+		showImage("Super Resolution 1", mSR1, 100 + w_small + 40, 100);
+		convert_layered_to_mat(mSR2, imgSR2);
+		showImage("Super Resolution 2", mSR2, 100 + w_small + 40, 100);
+		convert_layered_to_mat(mV1, imgV1);
+		showImage("V1", (mV1 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
+		convert_layered_to_mat(mV2, imgV2);
+		showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
+		convert_layered_to_mat(mFlow, imgFlow);
+		showImage("Flow Field", mFlow, 100 + w_small + w + 80, 100);
 
 #ifdef CAMERA
 		// end of camera loop
@@ -583,7 +616,7 @@ int main(int argc, char **argv)
 	// free allocated arrays
 	delete[] imgIn;
 #endif
-	delete[] imgOut;
+	delete[] imgFlow;
 	
 	// close all opencv windows
 	cvDestroyAllWindows();

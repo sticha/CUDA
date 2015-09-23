@@ -1,6 +1,9 @@
 #include "flow_color.h"
 #include <math.h>
 
+#define PI 3.1415926535f
+#define EPSILON 0.0001
+
 __device__ float d_getAngleFromVector(float v1, float v2) {
 	// compute angle in radians between motion vector v and (0, 1)
 	// the component v2 is assumed to be normalized w.r.t. the original vector v

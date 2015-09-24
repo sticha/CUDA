@@ -41,8 +41,8 @@ const int stdStartImg = 1;
 // #define CAMERA
 
 struct Data {
-	float* d_f1, *d_f2, *d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_p, *d_out, *d_energy;
-	float2* d_A, *d_q1, *d_q2;
+	float* d_f1, *d_f2, *d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_vp, *d_flow, *d_energy, *d_up1, *d_up2, *d_ur;
+	float2* d_A, *d_vq1, *d_vq2, *d_uq1, *d_uq2;
 };
 
 void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int nc, int colorBorder) {
@@ -66,38 +66,38 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	CUDA_CHECK;
 	cudaMalloc(&data.d_b, n*sizeof(float));
 	CUDA_CHECK;
-	cudaMalloc(&data.d_p, n*sizeof(float));
+	cudaMalloc(&data.d_vp, n*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_A, n*sizeof(float2));
 	CUDA_CHECK;
-	cudaMalloc(&data.d_q1, w*h*sizeof(float2));
+	cudaMalloc(&data.d_vq1, w*h*sizeof(float2));
 	CUDA_CHECK;
-	cudaMalloc(&data.d_q2, w*h*sizeof(float2));
+	cudaMalloc(&data.d_vq2, w*h*sizeof(float2));
 	CUDA_CHECK;
-	cudaMalloc(&data.d_out, wborder*hborder * 3 * sizeof(float));
+	cudaMalloc(&data.d_flow, wborder*hborder * 3 * sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_energy, sizeof(float));
 	CUDA_CHECK;
+	cudaMalloc(&data.d_up1, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&data.d_up2, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&data.d_ur, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&data.d_uq1, n*sizeof(float2));
+	CUDA_CHECK;
+	cudaMalloc(&data.d_uq2, n*sizeof(float2));
+	CUDA_CHECK;
 }
-void InitializeGPUData(float* f1, float* f2, Data data, int w, int h, int w_small, int h_small, int nc) {
+
+void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_small, int h_small, int nc) {
 	// # Initalize arrays
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
-	size_t n = w*h*nc;
 	// Fill arrays with 0
 	cudaMemset(data.d_v1, 0, w*h*sizeof(float));
 	CUDA_CHECK;
 	cudaMemset(data.d_v2, 0, w*h*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_b, 0, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_p, 0, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_A, 0, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_q1, 0, w*h*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_q2, 0, w*h*sizeof(float2));
 	CUDA_CHECK;
 	// Copy images to GPU
 	cudaMemcpy(data.d_f1, f1, n_small * sizeof(float), cudaMemcpyHostToDevice);
@@ -129,12 +129,17 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_v1);
 	cudaFree(data.d_v2);
 	cudaFree(data.d_b);
-	cudaFree(data.d_p);
+	cudaFree(data.d_vp);
 	cudaFree(data.d_A);
-	cudaFree(data.d_q1);
-	cudaFree(data.d_q2);
-	cudaFree(data.d_out);
+	cudaFree(data.d_vq1);
+	cudaFree(data.d_vq2);
+	cudaFree(data.d_flow);
 	cudaFree(data.d_energy);
+	cudaFree(data.d_up1);
+	cudaFree(data.d_up2);
+	cudaFree(data.d_ur);
+	cudaFree(data.d_uq1);
+	cudaFree(data.d_uq2);
 	CUDA_CHECK;
 }
 
@@ -153,52 +158,21 @@ __global__ void imgDif(float * d_u1, float * d_u2, float *d_b, int w, int h) {
 	d_b[idx] = d_u2[idx] - d_u1[idx];
 }
 
-void calculateSuperResolution(Data data, int w, int h, int w_small, int h_small, int nc, float* out_u1, float* out_u2, int iterations, float alpha, float beta, float gamma, float* v1, float* v2) {
-	float* d_u1, *d_u2, *d_v1, *d_v2, *d_p1, *d_p2, *d_r;
-	float2* d_q1, *d_q2;
+void calculateSuperResolution(Data& data, int w, int h, int w_small, int h_small, int nc, int iterations, float alpha, float beta, float gamma) {
 	// helper values
 	int n = w*h*nc;
 	int n_small = w_small*h_small*nc;
-
-	cudaMalloc(&d_u1, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_u2, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_v1, w*h*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_v2, w*h*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_p1, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_p2, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_r, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&d_q1, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMalloc(&d_q2, n*sizeof(float2));
-	CUDA_CHECK;
 	
-	// Copy images to GPU
-	cudaMemcpy(d_v1, v1, w * h * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(d_v2, v2, w * h * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-
 	// initalize temporary data
-	cudaMemset(d_u1, 0, n*sizeof(float));
+	cudaMemset(data.d_up1, 0, n_small*sizeof(float));
 	CUDA_CHECK;
-	cudaMemset(d_u2, 0, n*sizeof(float));
+	cudaMemset(data.d_up2, 0, n_small*sizeof(float));
 	CUDA_CHECK;
-	cudaMemset(d_p1, 0, n_small*sizeof(float));
+	cudaMemset(data.d_ur, 0, n*sizeof(float));
 	CUDA_CHECK;
-	cudaMemset(d_p2, 0, n_small*sizeof(float));
+	cudaMemset(data.d_uq1, 0, n*sizeof(float2));
 	CUDA_CHECK;
-	cudaMemset(d_r, 0, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(d_q1, 0, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(d_q2, 0, n*sizeof(float2));
+	cudaMemset(data.d_uq2, 0, n*sizeof(float2));
 	CUDA_CHECK;
 
 	// Calculate grid size
@@ -217,50 +191,39 @@ void calculateSuperResolution(Data data, int w, int h, int w_small, int h_small,
 
 	for (int i = 0; i < iterations; i++) {
 		// Update p1, p2, q1, q2, r and u
-		super_updateP<<<grid3d, block3d>>>(d_p1, data.d_f1, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_up1, data.d_f1, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		super_updateP<<<grid3d, block3d>>>(d_p2, data.d_f2, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_up2, data.d_f2, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		super_updateQ<<<grid3d, block3d>>>(d_q1, d_u1, sigmaQ, beta, w, h);
+		super_updateQ<<<grid3d, block3d>>>(data.d_uq1, data.d_u1, sigmaQ, beta, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		super_updateQ<<<grid3d, block3d>>>(d_q2, d_u2, sigmaQ, beta, w, h);
+		super_updateQ<<<grid3d, block3d>>>(data.d_uq2, data.d_u2, sigmaQ, beta, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		super_updateR<<<grid3d, block3d>>>(d_r, d_u1, d_u2, d_v1, d_v2, gamma, w, h);
+		super_updateR<<<grid3d, block3d>>>(data.d_ur, data.d_u1, data.d_u2, data.d_v1, data.d_v2, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		super_updateU<<<grid3d, block3d>>>(d_u1, d_u2, d_r, d_p1, d_p2, d_q1, d_q2, d_v1, d_v2, gamma, w, h);
+		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_ur, data.d_up1, data.d_up2, data.d_uq1, data.d_uq2, data.d_v1, data.d_v2, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 	}
-
-	// Copy result to Host
-	cudaMemcpy(out_u1, d_u1, n * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
-	cudaMemcpy(out_u2, d_u2, n * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
-
-	// Free GPU Memory
-	cudaFree(d_u1);
-	cudaFree(d_u2);
-	cudaFree(d_v1);
-	cudaFree(d_v2);
-	cudaFree(d_p1);
-	cudaFree(d_p2);
-	cudaFree(d_r);
-	cudaFree(d_q1);
-	cudaFree(d_q2);
-	CUDA_CHECK;
 }
 
 /**
  * u1, u2, are input images with size w*h*nc
  * v1, v2, are vector components with size w*h describing the flow
  */
-void calculateFlow(Data data, float gamma, int iterations, int w, int h, int nc) {
+void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc) {
+	// initialize temporary arrays
+	cudaMemset(data.d_vp, 0, w*h*nc*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(data.d_vq1, 0, w*h*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(data.d_vq2, 0, w*h*sizeof(float2));
+	CUDA_CHECK;
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
@@ -284,16 +247,16 @@ void calculateFlow(Data data, float gamma, int iterations, int w, int h, int nc)
 
 	for (int i = 0; i < iterations; i++) {
 		// Update p, q1, q2 and v
-		updateP<<<grid3d, block3d>>>(data.d_p, data.d_v1, data.d_v2, data.d_A, data.d_b, gamma, w, h);
+		updateP<<<grid3d, block3d>>>(data.d_vp, data.d_v1, data.d_v2, data.d_A, data.d_b, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		updateQ<<<grid2d, block2d>>>(data.d_q1, data.d_v1, sigmaQ, w, h);
+		updateQ<<<grid2d, block2d>>>(data.d_vq1, data.d_v1, sigmaQ, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		updateQ<<<grid2d, block2d>>>(data.d_q2, data.d_v2, sigmaQ, w, h);
+		updateQ<<<grid2d, block2d>>>(data.d_vq2, data.d_v2, sigmaQ, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-		updateV<<<grid2d, block2d>>>(data.d_v1, data.d_v2, data.d_p, data.d_q1, data.d_q2, data.d_A, w, h, nc);
+		updateV<<<grid2d, block2d>>>(data.d_v1, data.d_v2, data.d_vp, data.d_vq1, data.d_vq2, data.d_A, w, h, nc);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 
@@ -320,7 +283,7 @@ void getComputationResult(Data& data, float* v1, float* v2, float* flow, float* 
 
 	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
 
-	createColorCoding<<<grid2dborder, block2d>>>(data.d_v1, data.d_v2, data.d_out, wborder, hborder, colorBorder);
+	createColorCoding<<<grid2dborder, block2d>>>(data.d_v1, data.d_v2, data.d_flow, wborder, hborder, colorBorder);
 	//createColorCoding<<<grid2dborder, block2d>>>(d_u1, d_v1, d_v2, d_out, wborder, hborder, nc, colorBorder);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
@@ -330,7 +293,7 @@ void getComputationResult(Data& data, float* v1, float* v2, float* flow, float* 
 	CUDA_CHECK;
 	cudaMemcpy(v2, data.d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
-	cudaMemcpy(flow, data.d_out, wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(flow, data.d_flow, wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 	cudaMemcpy(sr1, data.d_u1, w * h * nc * sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
@@ -365,7 +328,15 @@ int main(int argc, char **argv)
 	getParam("gray", gray, argc, argv);
 	cout << "gray: " << gray << endl;
 
-	// ### Define your own parameters here as needed    
+	// ### Define your own parameters here as needed   
+	float alpha = 1.f;
+	getParam("alpha", alpha, argc, argv);
+	cout << "alpha: " << alpha << endl;
+
+	float beta = 1.f;
+	getParam("beta", beta, argc, argv);
+	cout << "beta: " << beta << endl;
+
 	float gamma = 10.f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
@@ -374,7 +345,7 @@ int main(int argc, char **argv)
 	getParam("border", colorBorder, argc, argv);
 	cout << "color coding border: " << colorBorder << endl;
 
-	float iterations = 200;
+	float iterations = 1000;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
 
@@ -555,8 +526,8 @@ int main(int argc, char **argv)
 
 		// Compute flow estimation
 		calculateFlow(data, gamma, iterations, w, h, nc);
-
-		// TODO: call calculation of super resolution
+		// Compute super resolution
+		calculateSuperResolution(data, w, h, w_small, h_small, nc, iterations, alpha, beta, gamma);
 		
 
 		// Get results from computation

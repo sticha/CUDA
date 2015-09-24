@@ -10,7 +10,7 @@ __global__ void super_updateP(float * d_p, float * d_f, float sigma, float alpha
 	int c = threadIdx.z;
 	if (x >= w || y >= h) return;
 
-	int idx = x + y * w * h + c * w * h;
+	int idx = x + y * w + c * w * h;
 
 	float pOld = d_p[idx];
 
@@ -32,7 +32,7 @@ __global__ void super_updateQ(float2 * d_q, float * d_u, float sigma, float beta
 	int c = threadIdx.z;
 	if (x >= w || y >= h) return;
 
-	int idx = x + y * w * h + c * w * h;
+	int idx = x + y * w + c * w * h;
 
 	// gradient of U
 	float2 gradU = gradient(d_u, x, y, c, w, h);
@@ -53,7 +53,7 @@ __global__ void super_updateR(float * d_r, float * d_u1, float * d_u2, float * d
 	int c = threadIdx.z;
 	if (x >= w || y >= h) return;
 
-	int idx = x + y * w * h;
+	int idx = x + y * w;
 	int idxc = idx + c * w * h;
 
 
@@ -84,7 +84,7 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	int c = threadIdx.z;
 	if (x >= w || y >= h) return;
 
-	int idx = x + y * w * h;
+	int idx = x + y * w;
 	int idxc = idx + c * w * h;
 
 	float u1Old = d_u1[idxc];

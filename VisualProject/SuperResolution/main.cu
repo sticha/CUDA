@@ -40,6 +40,9 @@ const int stdStartImg = 1;
 // uncomment to use the camera
 // #define CAMERA
 
+// uncomment to compute flow field energy
+// #define FLOW_ENERGY
+
 struct Data {
 	float* d_f1, *d_f2, *d_u1, *d_u2, *d_v1, *d_v2, *d_b, *d_vp, *d_flow, *d_energy, *d_up1, *d_up2, *d_ur;
 	float2* d_A, *d_vq1, *d_vq2, *d_uq1, *d_uq2;
@@ -76,8 +79,10 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	CUDA_CHECK;
 	cudaMalloc(&data.d_flow, wborder*hborder * 3 * sizeof(float));
 	CUDA_CHECK;
+#ifdef FLOW_ENERGY
 	cudaMalloc(&data.d_energy, sizeof(float));
 	CUDA_CHECK;
+#endif
 	cudaMalloc(&data.d_up1, n_small*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_up2, n_small*sizeof(float));
@@ -114,10 +119,6 @@ void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_sma
 	upsample<<<grid3d, block3d>>>(data.d_f2, data.d_u2, w_small, h_small);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
-	//cudaMemcpy(data.d_u1, f1, n * sizeof(float), cudaMemcpyHostToDevice);
-	//CUDA_CHECK;
-	//cudaMemcpy(data.d_u2, f2, n * sizeof(float), cudaMemcpyHostToDevice);
-	//CUDA_CHECK;
 }
 
 void freeGPUMemory(Data& data) {
@@ -134,7 +135,9 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_vq1);
 	cudaFree(data.d_vq2);
 	cudaFree(data.d_flow);
+#ifdef FLOW_ENERGY
 	cudaFree(data.d_energy);
+#endif
 	cudaFree(data.d_up1);
 	cudaFree(data.d_up2);
 	cudaFree(data.d_ur);
@@ -182,10 +185,6 @@ void calculateSuperResolution(Data& data, int w, int h, int w_small, int h_small
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
 
-	dim3 block1d = dim3(128, 1, 1);
-	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
-	int bytesSM1d = block1d.x * sizeof(float);
-
 	float sigmaP = 1.0f;
 	float sigmaQ = 0.5f;
 
@@ -231,9 +230,11 @@ void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
 
+#ifdef FLOW_ENERGY
 	dim3 block1d = dim3(128, 1, 1);
 	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
 	int bytesSM1d = block1d.x * sizeof(float);
+#endif
 
 	// Calculate b 
 	imgDif<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_b, w, h);
@@ -260,6 +261,7 @@ void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 
+#ifdef FLOW_ENERGY
 		cudaMemset(data.d_energy, 0, sizeof(float));
 		CUDA_CHECK;
 		flowFieldEnergy<<<grid1d, block1d, bytesSM1d>>>(data.d_energy, data.d_A, data.d_b, data.d_v1, data.d_v2, gamma, w, h, nc);
@@ -269,6 +271,7 @@ void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc
 		cudaMemcpy(&energy, data.d_energy, sizeof(float), cudaMemcpyDeviceToHost);
 		CUDA_CHECK;
 		cout << "Flow field energy in iteration " << i << ": " << energy << endl;
+#endif
 	}
 }
 
@@ -345,7 +348,7 @@ int main(int argc, char **argv)
 	getParam("border", colorBorder, argc, argv);
 	cout << "color coding border: " << colorBorder << endl;
 
-	float iterations = 1000;
+	float iterations = 200;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
 

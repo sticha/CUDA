@@ -42,6 +42,9 @@ const int stdStartImg = 1;
 // uncomment to compute flow field energy
 // #define FLOW_ENERGY
 
+// uncomment to compute super resolution energy
+// #define SUPER_ENERGY
+
 
 // struct to transport the pointer for data access on GPU memory
 struct Data {
@@ -70,8 +73,8 @@ struct Data {
 
 	float* d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
 
-#ifdef FLOW_ENERGY
-	float* d_energy;	// stores in a single value the energy of the previous calculated flowfield
+#if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
+	float* d_energy;	// stores in a single value the energy of the previous calculated flow field
 #endif
 
 };
@@ -112,7 +115,7 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	CUDA_CHECK;
 	cudaMalloc(&data.d_flow, wborder*hborder * 3 * sizeof(float));
 	CUDA_CHECK;
-#ifdef FLOW_ENERGY
+#if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	cudaMalloc(&data.d_energy, sizeof(float));
 	CUDA_CHECK;
 #endif
@@ -172,7 +175,7 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_v_q1);
 	cudaFree(data.d_v_q2);
 	cudaFree(data.d_flow);
-#ifdef FLOW_ENERGY
+#if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	cudaFree(data.d_energy);
 #endif
 	cudaFree(data.d_u_p1);
@@ -277,6 +280,12 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
 
+#ifdef SUPER_ENERGY
+	dim3 block1d = dim3(128, 1, 1);
+	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
+	int bytesSM1d = block1d.x * sizeof(float);
+#endif
+
 	// Step sizes
 	float sigmaP = 1.0f;
 	float sigmaQ = 0.5f;
@@ -307,6 +316,19 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_u_p1, data.d_u_p2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
+
+#ifdef SUPER_ENERGY
+		// Compute energy of latest super resolution
+		cudaMemset(data.d_energy, 0, sizeof(float));
+		CUDA_CHECK;
+		superResolutionEnergy<<<grid1d, block1d, bytesSM1d>>>(data.d_energy, data.d_u1, data.d_u2, data.d_f1, data.d_f2, data.d_v1, data.d_v2, alpha, beta, gamma, w, h, nc);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		float energy;
+		cudaMemcpy(&energy, data.d_energy, sizeof(float), cudaMemcpyDeviceToHost);
+		CUDA_CHECK;
+		cout << "Super resolution energy in iteration " << i << ": " << energy << endl;
+#endif
 	}
 }
 

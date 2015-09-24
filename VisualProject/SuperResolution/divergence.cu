@@ -102,3 +102,16 @@ __device__ float divergence(float2* d_q, int x, int y, int w, int h, int c) {
 
 	return ret;
 }
+
+// Computes the difference between two images in all color channels: d_diff = d_im2 - d_im1
+__global__ void imageDiff(float* d_im1, float* d_im2, float* d_diff, int w, int h) {
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
+	int c = threadIdx.z;
+
+	if (x >= w || y >= h)
+		return;
+
+	int idx = x + y * w + c * w * h;
+	d_diff[idx] = d_im2[idx] - d_im1[idx];
+}

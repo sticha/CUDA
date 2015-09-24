@@ -60,10 +60,10 @@ __device__ float upsample(float* in, int x_big, int y_big, int c, int w_big, int
 
 
 __device__ float downsample(int x_small, int y_small, int c, float* in, int w_small, int h_small) {
-	int x_big = x_small >> 1;
-	int y_big = y_small >> 1;
-	int w_big = w_small >> 1;
-	int h_big = h_small >> 1;
+	int x_big = x_small << 1;
+	int y_big = y_small << 1;
+	int w_big = w_small << 1;
+	int h_big = h_small << 1;
 
 	int idx_big = x_big + y_big * w_big + c * w_big * h_big;
 

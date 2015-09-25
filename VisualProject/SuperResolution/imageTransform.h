@@ -25,4 +25,7 @@ __global__ void blur(float *in, float *out, int w, int h, float kernelDia);
 
 float getKernel(float * kernel, float sigma, int diameter);
 void getNormalizedKernel(float * kernel, float sigma, int diameter);
+
+// gaussian blur (5x5 kernel for sigma = 1.5) as kernel function
+__global__ void gaussBlur5(float* in, float* out, int w, int h);
 #endif

@@ -105,3 +105,84 @@ __global__ void upsample(float* in, float* out, int w, int h){
 	//synchronization between all threads (of all blocks) can be ensured
 	//blur(x, y, c, out, w_big, h_big);
 }
+
+#define GK5_0 0.3434064786f
+#define GK5_1 0.2426675967f
+#define GK5_2 0.0856291639f
+#define GK5_A3 1.4887526836f
+#define GK5_A4 1.0936481794f
+
+__global__ void gaussBlur5(float* in, float* out, int w, int h) {
+	// shared memory for optimized memory access
+	extern __shared__ float sdata[];
+
+	// indices for image access
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
+	int c = threadIdx.z;
+	int wb = blockDim.x + 4;
+
+	int sindex = threadIdx.x + 2 + (threadIdx.y + 2) * wb;
+	int index = x + y * w + c * w * h;
+	bool realPixel = (x >= 0 && x < w && y >= 0 && y < h);
+
+	// fill shared memory (area covered by this block + 2 pixel of additional border)
+	float accum;
+	for (int si = threadIdx.x + threadIdx.y * blockDim.x; si < wb*(blockDim.y + 4); si += blockDim.x * blockDim.y) {
+		int inX = blockIdx.x * blockDim.x - 2 + si % wb;
+		int inY = blockIdx.y * blockDim.y - 2 + si / wb;
+		accum = 0.0f;
+		if (inX >= 0 && inX < w && inY >= 0 && inY < h) {
+			accum = in[inX + inY * w + c * w * h];
+		}
+		sdata[si] = accum;
+	}
+
+	// wait until all threads have stored the image data
+	__syncthreads();
+
+	float accum2;
+	if (realPixel) {
+		// blur horizontally
+		accum = sdata[sindex - 2] * GK5_2 + sdata[sindex - 1] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + 1] * GK5_1 + sdata[sindex + 2] * GK5_2;
+
+		if (x == 0 || x == w - 1) {
+			accum *= GK5_A3;
+		} else if (x == 1 || x == w - 2) {
+			accum *= GK5_A4;
+		}
+		// for the subsequent vertical blur two additional lines at top and bottom of the block have to be blurred as well
+		if (y <= 1 || y >= h - 2) {
+			int shiftIndex = sindex + (y > 1 ? 2 : -2) * wb;
+			accum2 = sdata[shiftIndex - 2] * GK5_2 + sdata[shiftIndex - 1] * GK5_1 + sdata[shiftIndex] * GK5_0 + sdata[shiftIndex + 1] * GK5_1 + sdata[shiftIndex + 2] * GK5_2;
+		}
+	}
+
+	// wait until all threads have computed the horizontal blur
+	__syncthreads();
+
+	if (realPixel) {
+		// store blurred pixels into shared memory
+		sdata[sindex] = accum;
+		if (y <= 1 || y >= h - 2) {
+			sdata[sindex + (y > 1 ? 2 : -2) * wb] = accum2;
+		}
+	}
+
+	// wait until all threads have stored the horizontally blurred pixel values
+	__syncthreads();
+
+	if (realPixel) {
+		// blur vertically
+		accum = sdata[sindex - 2 * wb] * GK5_2 + sdata[sindex - wb] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + wb] * GK5_1 + sdata[sindex + 2 * wb] * GK5_2;
+
+		if (y == 0 || y == h - 1) {
+			accum *= GK5_A3;
+		} else if (y == 1 || y == h - 2) {
+			accum *= GK5_A4;
+		}
+
+		// store result in output image
+		out[index] = accum;
+	}
+}

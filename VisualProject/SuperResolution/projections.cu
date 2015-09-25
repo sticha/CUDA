@@ -7,16 +7,16 @@ __device__ float2 projL2(float2 x, float limit) {
 		return x;
 	}
 
-	l = sqrtf(l);
-	x.x *= limit/l;
-	x.y *= limit/l;
+	l = limit/sqrtf(l);
+	x.x *= l;
+	x.y *= l;
 	return x;
 }
 
 __device__ float projL1(float x, float limit) {
 	if (x < -limit)
 		return -limit;
-	if (x> limit)
+	if (x > limit)
 		return limit;
 	return x;
 }

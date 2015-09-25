@@ -224,19 +224,19 @@ void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc
 	// Update in an alternating fashion the dual variables p, q1, q2 and the primal variable (flow field) v
 	for (int i = 0; i < iterations; i++) {
 		// Update dual variable p
-		updateP<<<grid3d, block3d>>>(data.d_v_p, data.d_v1, data.d_v2, data.d_A, data.d_b, gamma, w, h);
+		flow_updateP<<<grid3d, block3d>>>(data.d_v_p, data.d_v1, data.d_v2, data.d_A, data.d_b, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable q1
-		updateQ<<<grid2d, block2d>>>(data.d_v_q1, data.d_v1, sigmaQ, w, h);
+		flow_updateQ<<<grid2d, block2d>>>(data.d_v_q1, data.d_v1, sigmaQ, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable q2
-		updateQ<<<grid2d, block2d>>>(data.d_v_q2, data.d_v2, sigmaQ, w, h);
+		flow_updateQ<<<grid2d, block2d>>>(data.d_v_q2, data.d_v2, sigmaQ, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update flow field v
-		updateV<<<grid2d, block2d>>>(data.d_v1, data.d_v2, data.d_v_p, data.d_v_q1, data.d_v_q2, data.d_A, w, h, nc);
+		flow_updateV<<<grid2d, block2d>>>(data.d_v1, data.d_v2, data.d_v_p, data.d_v_q1, data.d_v_q2, data.d_A, w, h, nc);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 

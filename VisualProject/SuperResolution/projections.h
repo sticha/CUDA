@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 
 /**
- * Normale vector x if it is longer than the given limit
+ * Normalize vector x if it is longer than the given limit
  */
 __device__ float2 projL2(float2 x, float limit);
 

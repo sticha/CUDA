@@ -5,7 +5,8 @@
 
 #define EPSILON 0.0001
 
-__global__ void updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float* d_b, float gamma, int w, int h) {
+// Update dual variable p
+__global__ void flow_updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float* d_b, float gamma, int w, int h) {
 	// get current thread index (x, y, c)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
 	int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -42,7 +43,8 @@ __global__ void updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float
 	d_p[idxc] = 2 * acc - oldp;
 }
 
-__global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
+// Update dual variable q1 or q2
+__global__ void flow_updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
 	int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -70,7 +72,8 @@ __global__ void updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	d_q[idx] = make_float2(2 * acc.x - qold.x, 2 * acc.y - qold.y);
 }
 
-__global__ void updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, float2* d_q2, float2* d_A, int w, int h, int nc) {
+// Update flow field
+__global__ void flow_updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, float2* d_q2, float2* d_A, int w, int h, int nc) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
 	int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -94,11 +97,11 @@ __global__ void updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, floa
 	// A * p_k+1 - (div(q1_k+1) div(q2_k+1))
 	float acc1 = -div_q1;
 	float acc2 = -div_q2;
-	// t
+	// t = 1 / (4 + sum(abs(A)))
 	float tau1 = 4.0f;
 	float tau2 = 4.0f;
-	for (int i = 0; i < nc; i++) {
-		int cIdx = idx + i * w * h;
+	for (int c = 0; c < nc; c++) {
+		int cIdx = idx + c * w * h;
 		float p = d_p[cIdx];
 		float2 A = d_A[cIdx];
 		acc1 += p * A.x;

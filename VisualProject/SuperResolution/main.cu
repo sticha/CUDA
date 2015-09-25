@@ -35,7 +35,8 @@ const int stdNumDigits = 2;
 const int stdNumImgs = 2;
 const int stdStartImg = 1;
 
-
+extern __constant__ float blurKernel[];
+const int kernelDia = 5;
 // uncomment to use the camera
 // #define CAMERA
 
@@ -135,6 +136,12 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_small, int h_small, int nc) {
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
+
+	// Initialize BlurKernel for up/downsampling
+	float kernel[kernelDia];
+	getNormalizedKernel(kernel, 1.0f, kernelDia);
+	cudaMemcpyToSymbol(blurKernel, kernel, kernelDia);
+	CUDA_CHECK;
 
 	// Fill arrays with 0
 	cudaMemset(data.d_v1, 0, w*h*sizeof(float));

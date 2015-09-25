@@ -1,5 +1,6 @@
-// 1D Kernel
-__constant__ float * blurKernel;
+#include"helper.h"
+
+__constant__ float blurKernel[21];
 const int kernelDia = 5;
 const int kernelDia_Small = kernelDia / 2 + 1;
 
@@ -20,10 +21,9 @@ __device__ float upsample(float* in, int x_big, int y_big, int c, int w_big, int
 
 	// calculate indices
 	int idx_small = x_small + y_small * w_small + c * w_small * h_small;
-	int idx_big = x_big + y_big * w_big + c * w_big * h_big;
 
 
-	float result;
+	float result = 0.0f;
 	// Offset value, zero for left pixel, one for right pixels
 	int offsX = x_big % 2;
 	// Offset value, zero for top pixels, one for bottom pixels
@@ -36,11 +36,11 @@ __device__ float upsample(float* in, int x_big, int y_big, int c, int w_big, int
 			int valIdx_Y = clamp(y_small + i - kernelDia_Small / 2, 0, h_small - 1);
 			float val = in[valIdx_X + valIdx_Y * w_small];
 			// ignore most left value if a left pixel is evaluated
-			if (!offsX || i > 0) {
+			if (!offsX || j > 0) {
 				sum += blurKernel[2 * j - offsX] * val;
 			}
 			// ignore most right value if a right pixel is evaluated
-			if (offsX || i < kernelDia_Small - 1) {
+			if (offsX || j < kernelDia_Small - 1) {
 				sum += blurKernel[2 * j + 1 - offsX] * val;
 			}
 		}
@@ -58,25 +58,67 @@ __device__ float upsample(float* in, int x_big, int y_big, int c, int w_big, int
 	return result;
 }
 
+__global__ void testKernel(float * d_in, float * d_out1, float * d_out2, int w, int h){
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
-__device__ float downsample(int x_small, int y_small, int c, float* in, int w_small, int h_small) {
-	int x_big = x_small << 1;
-	int y_big = y_small << 1;
-	int w_big = w_small << 1;
-	int h_big = h_small << 1;
+	if (x >= w || y >= h)
+		return;
 
-	int idx_big = x_big + y_big * w_big + c * w_big * h_big;
+	int idx = x + y * w;
 
-	float result = 0.0f;
+	d_out1[idx] = upsample(d_in, x, y, 0, w, h);
+	d_out2[idx] = d_in[x / 2 + y / 2 * w / 2];
 
-	for (int i = 0; i < kernelDia; i++) {
-		float sum = 0.0f;
-		for (int j = 0; j < kernelDia; j++) {
-			int valIdx_X = clamp(x_big + j - kernelDia / 2, 0, w_big - 1);
-			int valIdx_Y = clamp(y_big + i - kernelDia / 2, 0, h_big - 1);
-			sum += blurKernel[j] * in[valIdx_X + valIdx_Y * w_big];
-		}
-		result += sum * blurKernel[i];
+}
+
+float getKernel(float * kernel, float sigma, int diameter){
+	float sum = 0.0f;
+	for (int y = 0; y < diameter; y++){
+		int b = y - diameter / 2;
+		float val = expf(-(b*b) / (2 * sigma*sigma));
+		kernel[y] = val;
+		sum += val;
 	}
-	return result;
+	return sum;
+}
+
+void getNormalizedKernel(float * kernel, float sigma, int diameter){
+	float sum = getKernel(kernel, sigma, diameter);
+
+	for (int i = 0; i < diameter; i++){
+		kernel[i] /= sum;
+	}
+}
+
+void testFunction(float * in, float * out1, float * out2, int w, int h){
+	float kernel[kernelDia];
+	getNormalizedKernel(kernel, 1.0f, kernelDia);
+	float * d_in, *d_out1, *d_out2;
+	cudaMalloc(&d_in, w / 2 * h / 2 * sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_out1, w *h*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&d_out2, w *h*sizeof(float));
+	CUDA_CHECK;
+	cudaMemcpy(d_in, in, w / 2 * h / 2 * sizeof(float), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpyToSymbol(blurKernel, kernel, kernelDia*sizeof(float));
+	CUDA_CHECK;
+
+	dim3 block2d = dim3(16, 16, 1);
+	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
+
+	testKernel << <grid2d, block2d >> >(d_in, d_out1, d_out2, w, h);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
+
+	cudaMemcpy(out1, d_out1, w*h*sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaMemcpy(out2, d_out2, w*h*sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+
+	cudaFree(d_in);
+	cudaFree(d_out1);
+	cudaFree(d_out2);
 }

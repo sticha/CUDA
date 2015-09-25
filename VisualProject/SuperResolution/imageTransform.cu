@@ -40,7 +40,7 @@ __device__ void downsample(int x, int y, int c, float* in, int w, int h, float* 
 
 
 
-__global__ void blur(float *in, float *out, int w, int h, float kernelDia){
+/*__global__ void blur(float *in, float *out, int w, int h, float kernelDia){
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -87,7 +87,7 @@ __global__ void blur(float *in, float *out, int w, int h, float kernelDia){
 		}
 		out[idx] = sum;
 	}
-}
+}*/
 
 
 __global__ void upsample(float* in, float* out, int w, int h){
@@ -168,11 +168,17 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 	return result;
 }
 
+// For a 1 dimensional 5 pixel gaussian blur kernel with sigma = 1.2 you have the weights [GK5_2, GK5_1, GK5_0, GK5_1, GK5_2]
+// Close to a border one part of the kernel might be unused so that the weights have to be renormalized (sum(w_i) = 1)
+// Possible partial kernels with 4 or 3 pixels:
+// [GK5_1, GK5_0, GK5_1, GK5_2] * GK5_AREA_4, [GK5_2, GK5_1, GK5_0, GK5_1] * GK5_AREA_4,
+// [GK5_0, GK5_1, GK5_2] * GK5_AREA_3, [GK5_2, GK5_1, GK5_0] * GK5_AREA_3
+
 #define GK5_0 0.3434064786f
 #define GK5_1 0.2426675967f
 #define GK5_2 0.0856291639f
-#define GK5_A3 1.4887526836f
-#define GK5_A4 1.0936481794f
+#define GK5_AREA_3 1.4887526836f
+#define GK5_AREA_4 1.0936481794f
 
 __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	// shared memory for optimized memory access
@@ -209,9 +215,9 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 		accum = sdata[sindex - 2] * GK5_2 + sdata[sindex - 1] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + 1] * GK5_1 + sdata[sindex + 2] * GK5_2;
 
 		if (x == 0 || x == w - 1) {
-			accum *= GK5_A3;
+			accum *= GK5_AREA_3;
 		} else if (x == 1 || x == w - 2) {
-			accum *= GK5_A4;
+			accum *= GK5_AREA_4;
 		}
 		// for the subsequent vertical blur two additional lines at top and bottom of the block have to be blurred as well
 		if (y <= 1 || y >= h - 2) {
@@ -239,9 +245,9 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 		accum = sdata[sindex - 2 * wb] * GK5_2 + sdata[sindex - wb] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + wb] * GK5_1 + sdata[sindex + 2 * wb] * GK5_2;
 
 		if (y == 0 || y == h - 1) {
-			accum *= GK5_A3;
+			accum *= GK5_AREA_3;
 		} else if (y == 1 || y == h - 2) {
-			accum *= GK5_A4;
+			accum *= GK5_AREA_4;
 		}
 
 		// store result in output image

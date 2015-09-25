@@ -152,21 +152,21 @@ void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_sma
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
 
-	//int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
+	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
 
-	// Upsample f to u
-	upsample<<<grid3d, block3d>>>(data.d_f1, data.d_u1, w_small, h_small);
+	// Upsample f to v_p (temporary result) and blur v_p to u
+	upsample<<<grid3d, block3d>>>(data.d_f1, data.d_v_p, w_small, h_small);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
-	//gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_v_p, data.d_u1, w, h);
-	//cudaDeviceSynchronize();
-	//CUDA_CHECK;
-	upsample<<<grid3d, block3d>>>(data.d_f2, data.d_u2, w_small, h_small);
+	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_v_p, data.d_u1, w, h);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
-	//gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_v_p, data.d_u2, w, h);
-	//cudaDeviceSynchronize();
-	//CUDA_CHECK;
+	upsample<<<grid3d, block3d>>>(data.d_f2, data.d_v_p, w_small, h_small);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
+	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_v_p, data.d_u2, w, h);
+	cudaDeviceSynchronize();
+	CUDA_CHECK;
 }
 
 // Free all allocated GPU memory
@@ -573,10 +573,13 @@ int main(int argc, char **argv) {
 		// # Call the CUDA computation
 		// Initialize arrays with start values
 		InitializeGPUData(imgIn[0], imgIn[1], data, w, h, w_small, h_small, nc);
-		// Compute flow estimation
-		calculateFlow(data, gamma, iterations, w, h, nc);
-		// Compute super resolution
-		//calculateSuperResolution(data, iterations, alpha, beta, gamma, w, h, w_small, h_small, nc);
+		// Alternating optimization of flow field and super resolution images
+		for (int i = 0; i < 1; i++) {
+			// Compute flow estimation
+			calculateFlow(data, gamma, iterations, w, h, nc);
+			// Compute super resolution
+			calculateSuperResolution(data, iterations, alpha, beta, gamma, w, h, w_small, h_small, nc);
+		}
 		// Get results from computation
 		getComputationResult(data, imgV1, imgV2, imgFlow, imgSR1, imgSR2, w, h, nc, colorBorder);
 

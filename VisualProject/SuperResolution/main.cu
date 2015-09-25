@@ -301,11 +301,11 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 	// Update in an alternating fashion the dual variables p1, p2, q1, q2, r and the primal variables (super resolution images) u1, u2
 	for (int i = 0; i < iterations; i++) {
 		// Update dual variable p1
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, data.d_u1, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable p2
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, data.d_u2, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable q1

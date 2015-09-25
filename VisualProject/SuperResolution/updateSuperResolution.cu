@@ -4,7 +4,7 @@
 #include "divergence.h"
 #include "helper_math.h"
 
-__global__ void super_updateP(float * d_p, float * d_f, float sigma, float alpha, int w, int h) {
+__global__ void super_updateP(float* d_p, float* d_f, float* d_u, float sigma, float alpha, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -16,8 +16,8 @@ __global__ void super_updateP(float * d_p, float * d_f, float sigma, float alpha
 
 	// p + sig*(Au-f)
 
-	float sampVal = d_downsample(d_f, x, y, c, w, h);
-	float pNew = pOld + sigma * ( sampVal - d_f[idx]);
+	float sampVal = d_downsample(d_u, x, y, c, w, h);
+	float pNew = pOld + sigma * (sampVal - d_f[idx]);
 	
 	// projC
 	pNew = projL1(pNew, alpha);
@@ -25,7 +25,7 @@ __global__ void super_updateP(float * d_p, float * d_f, float sigma, float alpha
 	d_p[idx] = 2 * pNew - pOld;
 }
 
-__global__ void super_updateQ(float2 * d_q, float * d_u, float sigma, float beta, int w, int h) {
+__global__ void super_updateQ(float2* d_q, float* d_u, float sigma, float beta, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -46,7 +46,7 @@ __global__ void super_updateQ(float2 * d_q, float * d_u, float sigma, float beta
 	d_q[idx] = 2 * qNew - qOld;
 }
 
-__global__ void super_updateR(float * d_r, float * d_u1, float * d_u2, float * d_v1, float * d_v2, float gamma, int w, int h) {
+__global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1, float* d_v2, float gamma, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -62,14 +62,14 @@ __global__ void super_updateR(float * d_r, float * d_u1, float * d_u2, float * d
 	float u1 = d_u1[idxc];
 	float u2 = d_u2[idxc];
 
-	// bw difference with neumann boundaries
+	// bw difference with dirichlet boundaries
 	float difUx = (x > 0) ? u2 - d_u2[idxc - 1] : u2;
 	float difUy = (y > 0) ? u2 - d_u2[idxc - w] : u2;
 
 	// calc sigma
 	float sigma = 1.0f / (2 + 2 * (fabsf(v1), fabsf(v2)));
 	// r + sigma * B (u1,u2)
-	float rNew = rOld + sigma* (u1 - u2 - difUx*v1 - difUy*v2);
+	float rNew = rOld + sigma * (u1 - u2 - difUx*v1 - difUy*v2);
 	// projG
 	rNew = projL1(rNew, gamma);
 	d_r[idxc] = 2 * rNew - rOld;
@@ -92,7 +92,7 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	float v1 = d_v1[idx];
 	float v2 = d_v2[idx];
 	
-	// bw difference with Neumann boundaries
+	// bw difference with Dirichlet boundaries
 	float difRx = (x > 0) ? r - d_r[idxc - 1] : r;
 	float difRy = (y > 0) ? r - d_r[idxc - w] : r;
 
@@ -106,7 +106,7 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 
 	// tau
 	float t1 = 1.0f / 6.0f;
-	float t2 = 1.0f / (6.0f + 2 * v1 + 2 * v2);
+	float t2 = 1.0f / (6.0f + 2 * fabsf(v1) + 2 * fabsf(v2));
 
 	// A^T*p
 

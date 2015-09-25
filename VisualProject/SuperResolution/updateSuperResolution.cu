@@ -15,9 +15,8 @@ __global__ void super_updateP(float * d_p, float * d_f, float sigma, float alpha
 	float pOld = d_p[idx];
 
 	// p + sig*(Au-f)
-//TODO
-	float sampVal;
-//	float sampVal = downsample(d_u, x, y);
+
+	float sampVal = d_downsample(d_f, x, y, c, w, h);
 	float pNew = pOld + sigma * ( sampVal - d_f[idx]);
 	
 	// projC
@@ -110,11 +109,9 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	float t2 = 1.0f / (6.0f + 2 * v1 + 2 * v2);
 
 	// A^T*p
-//TODO
-	float sampVal1;
-	float sampVal2;
-//	float sampVal1 = upsample(d_p1, x, y);
-//	float sampVal2 = upsample(d_p2, x, y);
+
+	float sampVal1 = d_upsample(d_p1, x, y, c, w, h);
+	float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
 
 	// update step
 	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1 + s1);

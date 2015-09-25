@@ -23,6 +23,9 @@ __global__ void upsample(float* in, float* out, int w, int h);
 
 __global__ void blur(float *in, float *out, int w, int h, float kernelDia);
 
+__device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, int h_big);
+__device__ float d_downsample(float* in, int x_small, int y_small, int c, int w_small, int h_small);
+
 float getKernel(float * kernel, float sigma, int diameter);
 void getNormalizedKernel(float * kernel, float sigma, int diameter);
 

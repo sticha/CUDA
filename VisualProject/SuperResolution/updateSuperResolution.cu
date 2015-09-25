@@ -101,8 +101,8 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	float s2 = -r + v1 * difRx + v2 * difRy;
 	
 	// div(q)
-	float divQ1 = divergence(d_q1, x, y, c, w, h);
-	float divQ2 = divergence(d_q2, x, y, c, w, h);
+	float divQ1 = divergence(d_q1, x, y, w, h, c);
+	float divQ2 = divergence(d_q2, x, y, w, h, c);
 
 	// tau
 	float t1 = 1.0f / 6.0f;
@@ -114,8 +114,8 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
 
 	// update step
-	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1 + s1);
-	d_u2[idxc] = u2Old - t2 * (sampVal2 - divQ2 + s2);
+	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1);// (sampVal1 - divQ1 + s1);
+	d_u2[idxc] = u2Old - t2 * (sampVal2 - divQ2);// (sampVal2 - divQ2 + s2);
 
 
 }

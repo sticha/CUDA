@@ -402,7 +402,7 @@ int main(int argc, char **argv) {
 	cout << "alpha: " << alpha << endl;
 
 	// Value for tuning the total variation of the high resolution images
-	float beta = 0.1f;
+	float beta = 0.001f;
 	getParam("beta", beta, argc, argv);
 	cout << "beta: " << beta << endl;
 

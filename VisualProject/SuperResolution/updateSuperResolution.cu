@@ -63,11 +63,15 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	float u2 = d_u2[idxc];
 
 	// bw difference with dirichlet boundaries
-	float difUx = (x > 0) ? u2 - d_u2[idxc - 1] : u2;
-	float difUy = (y > 0) ? u2 - d_u2[idxc - w] : u2;
+	//float difUx = (x > 0) ? u2 - d_u2[idxc - 1] : u2;
+	//float difUy = (y > 0) ? u2 - d_u2[idxc - w] : u2;
+
+	// fw difference with neumann boundaries
+	float difUx = (x < w-1) ? d_u2[idxc + 1] - u2 : 0.0f;
+	float difUy = (y < h-1) ? d_u2[idxc + w] - u2 : 0.0f;
 
 	// calc sigma
-	float sigma = 1.0f / (2 + 2 * (fabsf(v1), fabsf(v2)));
+	float sigma = 1.0f / (2 + 2 * (fabsf(v1) + fabsf(v2)));
 	// r + sigma * B (u1,u2)
 	float rNew = rOld + sigma * (u1 - u2 - difUx*v1 - difUy*v2);
 	// projG
@@ -114,8 +118,8 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
 
 	// update step
-	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1);// (sampVal1 - divQ1 + s1);
-	d_u2[idxc] = u2Old - t2 * (sampVal2 - divQ2);// (sampVal2 - divQ2 + s2);
+	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1 + s1);
+	d_u2[idxc] = u2Old - t2 * (sampVal2 - divQ2 + s2);
 
 
 }

@@ -74,6 +74,11 @@ struct Data {
 
 	float* d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
 
+	cudaTextureObject_t d_Tex_u1;
+	cudaTextureObject_t d_Tex_u2;
+	cudaTextureObject_t d_Tex_f1;
+	cudaTextureObject_t d_Tex_f2;
+
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	float* d_energy;	// stores in a single value the energy of the previous calculated flow field
 #endif
@@ -130,6 +135,59 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	CUDA_CHECK;
 	cudaMalloc(&data.d_u_q2, n*sizeof(float2));
 	CUDA_CHECK;
+
+	cudaChannelFormatDesc desc;
+	memset(&desc, 0, sizeof(cudaChannelFormatDesc));
+	desc.x = 32;
+	desc.f = cudaChannelFormatKindFloat;
+	
+	cudaResourceDesc resDesc;
+	memset(&resDesc, 0, sizeof(cudaResourceDesc));
+	resDesc.resType = cudaResourceTypePitch2D;
+	resDesc.res.pitch2D.devPtr = data.d_u1;
+	resDesc.res.pitch2D.width = w;
+	resDesc.res.pitch2D.height = h;
+	resDesc.res.pitch2D.pitchInBytes = w * sizeof(float);
+	resDesc.res.pitch2D.desc = desc;
+
+	cudaTextureDesc texDesc;
+	memset(&texDesc, 0, sizeof(cudaTextureDesc));
+	texDesc.filterMode = cudaFilterModeLinear;
+	texDesc.addressMode[0] = cudaAddressModeClamp;
+	texDesc.addressMode[1] = cudaAddressModeClamp;
+	texDesc.addressMode[2] = cudaAddressModeClamp;
+	texDesc.normalizedCoords = true;
+
+	cudaResourceViewDesc rvDesc;
+	memset(&rvDesc, 0, sizeof(cudaResourceViewDesc));
+	rvDesc.width = w;
+	rvDesc.height = h;
+	rvDesc.firstLayer = 0;
+	rvDesc.lastLayer = nc - 1;
+
+
+	cudaCreateTextureObject(&data.d_Tex_u1, &resDesc, &texDesc, &rvDesc);
+	CUDA_CHECK;
+	
+	resDesc.res.pitch2D.devPtr = data.d_u2;
+	cudaCreateTextureObject(&data.d_Tex_u2, &resDesc, &texDesc, &rvDesc);
+	CUDA_CHECK;
+	
+	
+	rvDesc.width = w_small;
+	rvDesc.height = h_small;
+	resDesc.res.pitch2D.width = w_small;
+	resDesc.res.pitch2D.height = h_small;
+
+	resDesc.res.pitch2D.devPtr = data.d_f1;
+	resDesc.res.pitch2D.pitchInBytes = w_small * sizeof(float);
+	cudaCreateTextureObject(&data.d_Tex_f1, &resDesc, &texDesc, &rvDesc);
+	CUDA_CHECK;
+	
+	resDesc.res.pitch2D.devPtr = data.d_f2;
+	cudaCreateTextureObject(&data.d_Tex_f2, &resDesc, &texDesc, &rvDesc);
+	CUDA_CHECK;
+
 }
 
 // Initializes the arrays on GPU memory for optimization process
@@ -198,6 +256,10 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_u_r);
 	cudaFree(data.d_u_q1);
 	cudaFree(data.d_u_q2);
+	cudaDestroyTextureObject(data.d_Tex_u1);
+	cudaDestroyTextureObject(data.d_Tex_u2);
+	cudaDestroyTextureObject(data.d_Tex_f1);
+	cudaDestroyTextureObject(data.d_Tex_f2);
 	CUDA_CHECK;
 }
 
@@ -589,13 +651,13 @@ int main(int argc, char **argv) {
 		}
 		// Get results from computation
 		getComputationResult(data, imgV1, imgV2, imgFlow, imgSR1, imgSR2, w, h, nc, colorBorder);
-
+		
 		// Get time after calculation and compute duration
 		timer.end();
 		float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;
 
-
+				
 		// show input image
 #ifdef CAMERA
 		convert_layered_to_mat(mIn1, imgIn1);

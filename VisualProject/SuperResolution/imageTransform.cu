@@ -1,10 +1,10 @@
 #include "imageTransform.h"
 #include "helper_math.h"
-__constant__ float blurKernel[21];
+__constant__ float blurKernel[5];
 const int kernelDia = 5;
 const int kernelDia_Small = kernelDia / 2 + 1;
 
-float getKernel(float * kernel, float sigma, int diameter){
+float getKernel(float* kernel, float sigma, int diameter){
 	float sum = 0.0f;
 	for (int y = 0; y < diameter; y++){
 		int b = y - diameter / 2;
@@ -15,7 +15,7 @@ float getKernel(float * kernel, float sigma, int diameter){
 	return sum;
 }
 
-void getNormalizedKernel(float * kernel, float sigma, int diameter){
+void getNormalizedKernel(float* kernel, float sigma, int diameter){
 	float sum = getKernel(kernel, sigma, diameter);
 
 	for (int i = 0; i < diameter; i++){
@@ -141,10 +141,10 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 	int offsY = y_big % 2;
 	for (int i = 0; i < kernelDia_Small; i++) {
 		float sum = 0.0f;
+		int valIdx_Y = clamp(y_small + i - kernelDia_Small / 2, 0, h_small - 1);
 		for (int j = 0; j < kernelDia_Small; j++) {
 			// only get values inside the image
 			int valIdx_X = clamp(x_small + j - kernelDia_Small / 2, 0, w_small - 1);
-			int valIdx_Y = clamp(y_small + i - kernelDia_Small / 2, 0, h_small - 1);
 			float val = in[valIdx_X + valIdx_Y * w_small + w_small * h_small * c];
 			// ignore most left value if a left pixel is evaluated
 			if (!offsX || j > 0) {
@@ -177,8 +177,8 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 #define GK5_0 0.3434064786f
 #define GK5_1 0.2426675967f
 #define GK5_2 0.0856291639f
-#define GK5_AREA_3 1.4887526836f
-#define GK5_AREA_4 1.0936481794f
+#define GK5_AREA_3 1.4887526834f
+#define GK5_AREA_4 1.0936481792f
 
 __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	// shared memory for optimized memory access

@@ -139,8 +139,8 @@ void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_sma
 
 	// Initialize BlurKernel for up/downsampling
 	float kernel[kernelDia];
-	getNormalizedKernel(kernel, 1.0f, kernelDia);
-	cudaMemcpyToSymbol(blurKernel, kernel, kernelDia);
+	getNormalizedKernel(kernel, 1.2f, kernelDia);
+	cudaMemcpyToSymbol(blurKernel, kernel, kernelDia*sizeof(float));
 	CUDA_CHECK;
 
 	// Fill arrays with 0

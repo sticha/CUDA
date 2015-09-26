@@ -62,16 +62,20 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	float u1 = d_u1[idxc];
 	float u2 = d_u2[idxc];
 
-	// bw difference with dirichlet boundaries
+	// backward difference with Dirichlet boundaries
 	//float difUx = (x > 0) ? u2 - d_u2[idxc - 1] : u2;
 	//float difUy = (y > 0) ? u2 - d_u2[idxc - w] : u2;
 
-	// fw difference with neumann boundaries
+	// forward difference with neumann boundaries
 	float difUx = (x < w-1) ? d_u2[idxc + 1] - u2 : 0.0f;
 	float difUy = (y < h-1) ? d_u2[idxc + w] - u2 : 0.0f;
 
+	// central difference with neumann boundaries
+	//float difUx = (x < w - 1 && x > 0) ? d_u2[idxc + 1] - d_u2[idxc - 1] : 0.0f;
+	//float difUy = (y < h - 1 && y > 0) ? d_u2[idxc + w] - d_u2[idxc - w] : 0.0f;
+
 	// calc sigma
-	float sigma = 1.0f / (2 + 2 * (fabsf(v1) + fabsf(v2)));
+	float sigma = 1.0f / (2 + 2 * fabsf(v1) + 2 * fabsf(v2));
 	// r + sigma * B (u1,u2)
 	float rNew = rOld + sigma * (u1 - u2 - difUx*v1 - difUy*v2);
 	// projG
@@ -96,9 +100,17 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float * d
 	float v1 = d_v1[idx];
 	float v2 = d_v2[idx];
 	
-	// bw difference with Dirichlet boundaries
+	// backward difference with Dirichlet boundaries
 	float difRx = (x > 0) ? r - d_r[idxc - 1] : r;
 	float difRy = (y > 0) ? r - d_r[idxc - w] : r;
+
+	// forward difference with Neumann boundaries
+	//float difRx = (x < w - 1) ? d_r[idxc + 1] - r : 0.0f;
+	//float difRy = (y < h - 1) ? d_r[idxc + w] - r : 0.0f;
+
+	// central difference with Neumann boundaries
+	//float difRx = (x < w - 1 && x > 0) ? d_r[idxc + 1] - d_r[idxc - 1] : 0.0f;
+	//float difRy = (y < h - 1 && y > 0) ? d_r[idxc + w] - d_r[idxc - w] : 0.0f;
 
 	// calc s with the differences
 	float s1 = r;

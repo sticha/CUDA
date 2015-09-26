@@ -76,8 +76,8 @@ struct Data {
 
 	cudaTextureObject_t d_Tex_u1;
 	cudaTextureObject_t d_Tex_u2;
-	cudaTextureObject_t d_Tex_f1;
-	cudaTextureObject_t d_Tex_f2;
+	cudaTextureObject_t d_Tex_u_p1;
+	cudaTextureObject_t d_Tex_u_p2;
 
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	float* d_energy;	// stores in a single value the energy of the previous calculated flow field
@@ -179,13 +179,13 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	resDesc.res.pitch2D.width = w_small;
 	resDesc.res.pitch2D.height = h_small;
 
-	resDesc.res.pitch2D.devPtr = data.d_f1;
+	resDesc.res.pitch2D.devPtr = data.d_u_p1;
 	resDesc.res.pitch2D.pitchInBytes = w_small * sizeof(float);
-	cudaCreateTextureObject(&data.d_Tex_f1, &resDesc, &texDesc, &rvDesc);
+	cudaCreateTextureObject(&data.d_Tex_u_p1, &resDesc, &texDesc, &rvDesc);
 	CUDA_CHECK;
 	
-	resDesc.res.pitch2D.devPtr = data.d_f2;
-	cudaCreateTextureObject(&data.d_Tex_f2, &resDesc, &texDesc, &rvDesc);
+	resDesc.res.pitch2D.devPtr = data.d_u_p2;
+	cudaCreateTextureObject(&data.d_Tex_u_p2, &resDesc, &texDesc, &rvDesc);
 	CUDA_CHECK;
 
 }
@@ -258,8 +258,8 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_u_q2);
 	cudaDestroyTextureObject(data.d_Tex_u1);
 	cudaDestroyTextureObject(data.d_Tex_u2);
-	cudaDestroyTextureObject(data.d_Tex_f1);
-	cudaDestroyTextureObject(data.d_Tex_f2);
+	cudaDestroyTextureObject(data.d_Tex_u_p1);
+	cudaDestroyTextureObject(data.d_Tex_u_p2);
 	CUDA_CHECK;
 }
 
@@ -370,11 +370,11 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 	// Update in an alternating fashion the dual variables p1, p2, q1, q2, r and the primal variables (super resolution images) u1, u2
 	for (int i = 0; i < iterations; i++) {
 		// Update dual variable p1
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, data.d_u1, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, data.d_Tex_u1, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable p2
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, data.d_u2, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, data.d_Tex_u2, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable q1
@@ -390,7 +390,7 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update super resolution images u1, u2
-		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_u_p1, data.d_u_p2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, gamma, w, h);
+		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_Tex_u_p1, data.d_Tex_u_p2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 

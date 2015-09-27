@@ -74,10 +74,10 @@ struct Data {
 
 	float* d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
 
-	cudaTextureObject_t d_Tex_u1;
-	cudaTextureObject_t d_Tex_u2;
-	cudaTextureObject_t d_Tex_u_p1;
-	cudaTextureObject_t d_Tex_u_p2;
+	cudaTextureObject_t *d_Tex_u1;
+	cudaTextureObject_t *d_Tex_u2;
+	cudaTextureObject_t *d_Tex_u_p1;
+	cudaTextureObject_t *d_Tex_u_p2;
 
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	float* d_energy;	// stores in a single value the energy of the previous calculated flow field
@@ -144,10 +144,6 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	cudaResourceDesc resDesc;
 	memset(&resDesc, 0, sizeof(cudaResourceDesc));
 	resDesc.resType = cudaResourceTypePitch2D;
-	resDesc.res.pitch2D.devPtr = data.d_u1;
-	resDesc.res.pitch2D.width = w;
-	resDesc.res.pitch2D.height = h;
-	resDesc.res.pitch2D.pitchInBytes = w * sizeof(float);
 	resDesc.res.pitch2D.desc = desc;
 
 	cudaTextureDesc texDesc;
@@ -158,36 +154,50 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	texDesc.addressMode[2] = cudaAddressModeClamp;
 	texDesc.normalizedCoords = true;
 
-	cudaResourceViewDesc rvDesc;
-	memset(&rvDesc, 0, sizeof(cudaResourceViewDesc));
-	rvDesc.width = w;
-	rvDesc.height = h;
-	rvDesc.firstLayer = 0;
-	rvDesc.lastLayer = nc - 1;
+	cudaMalloc(&data.d_Tex_u1, nc * sizeof(cudaTextureObject_t));
+	cudaMalloc(&data.d_Tex_u2, nc * sizeof(cudaTextureObject_t));
+	cudaMalloc(&data.d_Tex_u_p1, nc * sizeof(cudaTextureObject_t));
+	cudaMalloc(&data.d_Tex_u_p2, nc * sizeof(cudaTextureObject_t));
 
+	cudaTextureObject_t *tempU1 = new cudaTextureObject_t[nc];
+	cudaTextureObject_t *tempU2 = new cudaTextureObject_t[nc];
+	cudaTextureObject_t *tempP1 = new cudaTextureObject_t[nc];
+	cudaTextureObject_t *tempP2 = new cudaTextureObject_t[nc];
 
-	cudaCreateTextureObject(&data.d_Tex_u1, &resDesc, &texDesc, &rvDesc);
-	CUDA_CHECK;
-	
-	resDesc.res.pitch2D.devPtr = data.d_u2;
-	cudaCreateTextureObject(&data.d_Tex_u2, &resDesc, &texDesc, &rvDesc);
-	CUDA_CHECK;
-	
-	
-	rvDesc.width = w_small;
-	rvDesc.height = h_small;
-	resDesc.res.pitch2D.width = w_small;
-	resDesc.res.pitch2D.height = h_small;
+	for (int i = 0; i < nc; i++)
+	{
+		resDesc.res.pitch2D.devPtr = &data.d_u1[i * w * h];
+		resDesc.res.pitch2D.width = w;
+		resDesc.res.pitch2D.height = h;
+		resDesc.res.pitch2D.pitchInBytes = w * sizeof(float);
 
-	resDesc.res.pitch2D.devPtr = data.d_u_p1;
-	resDesc.res.pitch2D.pitchInBytes = w_small * sizeof(float);
-	cudaCreateTextureObject(&data.d_Tex_u_p1, &resDesc, &texDesc, &rvDesc);
-	CUDA_CHECK;
-	
-	resDesc.res.pitch2D.devPtr = data.d_u_p2;
-	cudaCreateTextureObject(&data.d_Tex_u_p2, &resDesc, &texDesc, &rvDesc);
-	CUDA_CHECK;
+		cudaCreateTextureObject(&tempU1[i], &resDesc, &texDesc, NULL);
+		CUDA_CHECK;
 
+		resDesc.res.pitch2D.devPtr = &data.d_u2[i * w * h];
+		cudaCreateTextureObject(&tempU2[i], &resDesc, &texDesc, NULL);
+		CUDA_CHECK;
+
+		resDesc.res.pitch2D.width = w_small;
+		resDesc.res.pitch2D.height = h_small;
+		resDesc.res.pitch2D.devPtr = &data.d_u_p1[i * w_small * h_small];
+		resDesc.res.pitch2D.pitchInBytes = w_small * sizeof(float);
+		cudaCreateTextureObject(&tempP1[i], &resDesc, &texDesc, NULL);
+		CUDA_CHECK;
+
+		resDesc.res.pitch2D.devPtr = &data.d_u_p2[i * w_small * h_small];
+		cudaCreateTextureObject(&tempP2[i], &resDesc, &texDesc, NULL);
+		CUDA_CHECK;
+	}
+
+	cudaMemcpy(data.d_Tex_u1, tempU1, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(data.d_Tex_u2, tempU2, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(data.d_Tex_u_p1, tempP1, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
+	cudaMemcpy(data.d_Tex_u_p2, tempP2, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+	CUDA_CHECK;
 }
 
 // Initializes the arrays on GPU memory for optimization process
@@ -256,10 +266,6 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_u_r);
 	cudaFree(data.d_u_q1);
 	cudaFree(data.d_u_q2);
-	cudaDestroyTextureObject(data.d_Tex_u1);
-	cudaDestroyTextureObject(data.d_Tex_u2);
-	cudaDestroyTextureObject(data.d_Tex_u_p1);
-	cudaDestroyTextureObject(data.d_Tex_u_p2);
 	CUDA_CHECK;
 }
 
@@ -393,7 +399,7 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_Tex_u_p1, data.d_Tex_u_p2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, gamma, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-
+		
 #ifdef SUPER_ENERGY
 		// Compute energy of latest super resolution
 		cudaMemset(data.d_energy, 0, sizeof(float));
@@ -656,8 +662,7 @@ int main(int argc, char **argv) {
 		timer.end();
 		float t = timer.get();  // elapsed time in seconds
 		cout << "time: " << t * 1000 << " ms" << endl;
-
-				
+		
 		// show input image
 #ifdef CAMERA
 		convert_layered_to_mat(mIn1, imgIn1);

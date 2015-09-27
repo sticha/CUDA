@@ -4,7 +4,7 @@
 #include "divergence.h"
 #include "helper_math.h"
 
-__global__ void super_updateP(float* d_p, float* d_f, cudaTextureObject_t d_u, float sigma, float alpha, int w, int h) {
+__global__ void super_updateP(float* d_p, float* d_f, cudaTextureObject_t* d_u, float sigma, float alpha, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -19,7 +19,7 @@ __global__ void super_updateP(float* d_p, float* d_f, cudaTextureObject_t d_u, f
 	//float sampVal = d_downsample(d_u, x, y, c, w, h);
 	float normCoordsX = float(x + 0.5f) / w;
 	float normCoordsY = float(y + 0.5f) / h;
-	float sampVal = tex2DLayered<float>(d_u, normCoordsX, normCoordsY, c);
+	float sampVal = tex2D<float>(d_u[c], normCoordsX, normCoordsY);
 
 	float pNew = pOld + sigma * (sampVal - d_f[idx]);
 	
@@ -87,7 +87,7 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	d_r[idxc] = 2 * rNew - rOld;
 }
 
-__global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, cudaTextureObject_t d_p1, cudaTextureObject_t d_p2,
+__global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, cudaTextureObject_t* d_p1, cudaTextureObject_t* d_p2,
 	float2 * d_q1, float2 * d_q2, float * d_v1, float * d_v2, float gamma, int w, int h) {
 	
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -135,8 +135,8 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, cudaTextu
 
 	float normCoordsX = float(x + 0.5f) / w;
 	float normCoordsY = float(y + 0.5f) / h;
-	float sampVal1 = tex2DLayered<float>(d_p1, normCoordsX, normCoordsY, c);
-	float sampVal2 = tex2DLayered<float>(d_p2, normCoordsX, normCoordsY, c);
+	float sampVal1 = tex2D<float>(d_p1[c], normCoordsX, normCoordsY);
+	float sampVal2 = tex2D<float>(d_p2[c], normCoordsX, normCoordsY);
 
 	// update step
 	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1 + s1);

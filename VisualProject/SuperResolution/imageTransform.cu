@@ -23,11 +23,6 @@ void getNormalizedKernel(float* kernel, float sigma, int diameter){
 	}
 }
 
-
-__device__ void blur(int x, int y, int c, float* img, int w, int h){
-	//TODO
-}
-
 __global__ void downsample(float* in_big, float* out_small, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;

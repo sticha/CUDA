@@ -404,7 +404,7 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable p1
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, data.d_Au, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d_small, block3d>>>(data.d_u_p1, data.d_f1, data.d_Au, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Blur u2
@@ -416,7 +416,7 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable p2
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, data.d_Au, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d_small, block3d>>>(data.d_u_p2, data.d_f2, data.d_Au, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable q1

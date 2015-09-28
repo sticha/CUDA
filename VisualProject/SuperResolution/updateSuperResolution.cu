@@ -88,7 +88,7 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 }
 
 __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, cudaTextureObject_t* d_p1, cudaTextureObject_t* d_p2,
-	float2 * d_q1, float2 * d_q2, float * d_v1, float * d_v2, float gamma, int w, int h) {
+	float2 * d_q1, float2 * d_q2, float * d_v1, float * d_v2, int w, int h) {
 	
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;

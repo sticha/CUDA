@@ -396,7 +396,7 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update super resolution images u1, u2
-		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_Tex_u_p1, data.d_Tex_u_p2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, gamma, w, h);
+		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_Tex_u_p1, data.d_Tex_u_p2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		

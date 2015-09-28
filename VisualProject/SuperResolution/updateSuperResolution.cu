@@ -4,7 +4,7 @@
 #include "divergence.h"
 #include "helper_math.h"
 
-__global__ void super_updateP(float* d_p, float* d_f, cudaTextureObject_t* d_u, float sigma, float alpha, int w, int h) {
+__global__ void super_updateP(float* d_p, float* d_f, float* d_Au, float sigma, float alpha, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -16,10 +16,8 @@ __global__ void super_updateP(float* d_p, float* d_f, cudaTextureObject_t* d_u, 
 
 	// p + sig*(Au-f)
 
-	//float sampVal = d_downsample(d_u, x, y, c, w, h);
-	float normCoordsX = float(x + 0.5f) / w;
-	float normCoordsY = float(y + 0.5f) / h;
-	float sampVal = tex2D<float>(d_u[c], normCoordsX, normCoordsY);
+	float sampVal;// = d_downsample(d_Au, x, y, c, w, h);
+	
 
 	float pNew = pOld + sigma * (sampVal - d_f[idx]);
 	
@@ -87,7 +85,7 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	d_r[idxc] = 2 * rNew - rOld;
 }
 
-__global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, cudaTextureObject_t* d_p1, cudaTextureObject_t* d_p2,
+__global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float* d_Atp1, float* d_Atp2,
 	float2 * d_q1, float2 * d_q2, float * d_v1, float * d_v2, int w, int h) {
 	
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -130,17 +128,10 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, cudaTextu
 
 	// A^T*p
 
-	//float sampVal1 = d_upsample(d_p1, x, y, c, w, h);
-	//float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
-
-	float normCoordsX = float(x + 0.5f) / w;
-	float normCoordsY = float(y + 0.5f) / h;
-	float sampVal1 = tex2D<float>(d_p1[c], normCoordsX, normCoordsY);
-	float sampVal2 = tex2D<float>(d_p2[c], normCoordsX, normCoordsY);
+	float sampVal1;// = d_upsample(d_p1, x, y, c, w, h);
+	float sampVal2;// = d_upsample(d_p2, x, y, c, w, h);
 
 	// update step
 	d_u1[idxc] = u1Old - t1 * (sampVal1 - divQ1 + s1);
 	d_u2[idxc] = u2Old - t2 * (sampVal2 - divQ2 + s2);
-
-
 }

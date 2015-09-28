@@ -55,6 +55,8 @@ struct Data {
 
 	float*	d_u1;		// [w * h * nc]: first high resolution output image u1 (also used for intermediate results in optimization process)
 	float*	d_u2;		// [w * h * nc]: second high resolution output image u2 (also used for intermediate results in optimization process)
+	float*  d_u_blurred;// [w * h * nc]: Intermediate result of a blurred high resolution image
+	float*  d_Au;		// [w_small * h_small * nc]: Blurred and downsampled version of a high resolution image used for one update step
 
 	float*	d_v1;		// [w * h]: x-direction of the final flow field v1 (also used for intermediate results in optimization process)
 	float*	d_v2;		// [w * h]: y-direction of the final flow field v2 (also used for intermediate results in optimization process)
@@ -104,6 +106,10 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	cudaMalloc(&data.d_u1, n*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_u2, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&data.d_u_blurred, n*sizeof(float));
+	CUDA_CHECK;
+	cudaMalloc(&data.d_Au, n_small*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_v1, w*h*sizeof(float));
 	CUDA_CHECK;
@@ -250,6 +256,8 @@ void freeGPUMemory(Data& data) {
 	cudaFree(data.d_f2);
 	cudaFree(data.d_u1);
 	cudaFree(data.d_u2);
+	cudaFree(data.d_u_blurred);
+	cudaFree(data.d_Au);
 	cudaFree(data.d_v1);
 	cudaFree(data.d_v2);
 	cudaFree(data.d_b);
@@ -359,9 +367,12 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
+	dim3 grid3d_small = dim3((w_small + block3d.x - 1) / block3d.x, (h_small + block3d.y - 1) / block3d.y, 1);
 
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
+
+	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
 
 #ifdef SUPER_ENERGY
 	dim3 block1d = dim3(128, 1, 1);
@@ -375,12 +386,28 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 
 	// Update in an alternating fashion the dual variables p1, p2, q1, q2, r and the primal variables (super resolution images) u1, u2
 	for (int i = 0; i < iterations; i++) {
+		// Blur u1
+		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u1, data.d_u_blurred, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		// Downsample blurred u1
+		downsample<<<grid3d_small, block3d>>>(data.d_u_blurred, data.d_Au, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 		// Update dual variable p1
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, data.d_u1, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_u_p1, data.d_f1, data.d_Au, sigmaP, alpha, w_small, h_small);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		// Blur u2
+		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u2, data.d_u_blurred, w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		// Downsample blurred u2
+		downsample<<<grid3d_small, block3d>>>(data.d_u_blurred, data.d_Au, w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable p2
-		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, data.d_u2, sigmaP, alpha, w_small, h_small);
+		super_updateP<<<grid3d, block3d>>>(data.d_u_p2, data.d_f2, data.d_Au, sigmaP, alpha, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		// Update dual variable q1

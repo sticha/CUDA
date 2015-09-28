@@ -61,17 +61,11 @@ __global__ void super_updateQ(float2* d_q, float* d_u, float sigma, float beta, 
 	d_q[idx] = 2 * qNew - qOld;
 }
 
-__device__ float applyBflow(float* d_u1, float* d_u2, float* d_v1, float* d_v2, float rOld, int x, int y, int c, int w, int h) {
+__device__ float applyBflow(float* d_u1, float* d_u2, float v1, float v2, int x, int y, int c, int w, int h) {
 	// index for image pixel access without color channel
 	int idx = x + y * w;
 	// index for image pixel access with color channel
 	int idxc = idx + c * w * h;
-
-	// previous values of r, v1, v2, u1, u2
-	float v1 = d_v1[idx];
-	float v2 = d_v2[idx];
-	float u1 = d_u1[idxc];
-	float u2 = d_u2[idxc];
 
 	// backward difference with Dirichlet boundaries
 	//float difU2x = (x > 0) ? u2 - d_u2[idxc - 1] : u2;
@@ -94,11 +88,8 @@ __device__ float applyBflow(float* d_u1, float* d_u2, float* d_v1, float* d_v2, 
 		difU2y = 0.0f;
 	}
 
-	// compute step size sigma
-	float sigma = 1.0f / (2 + 2 * fabsf(v1) + 2 * fabsf(v2));
-
 	// r + sigma * B (u1,u2)^T
-	return rOld + sigma * (u1 - u2 - v1 * difU2x - v2 * difU2y);
+	return (d_u1[idxc] - d_u2[idxc] - v1 * difU2x - v2 * difU2y);
 }
 
 __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1, float* d_v2, float gamma, int w, int h) {
@@ -117,11 +108,16 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	// index for image pixel access with color channel
 	int idxc = idx + c * w * h;
 
-	// previous r
+	// previous r, v1, v2
 	float rOld = d_r[idxc];
+	float v1 = d_v1[idx];
+	float v2 = d_v2[idx];
+
+	// compute step size sigma
+	float sigma = 1.0f / (2 + 2 * fabsf(v1) + 2 * fabsf(v2));
 
 	// apply operator B_flow
-	float rNew = applyBflow(d_u1, d_u2, d_v1, d_v2, rOld, x, y, c, w, h);
+	float rNew = rOld + sigma * applyBflow(d_u1, d_u2, v1, v2, x, y, c, w, h);
 
 	// projL1 to gamma
 	rNew = projL1(rNew, gamma);
@@ -207,6 +203,39 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float* d_
 	//float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
 
 	// update step
-	d_u1[idxc] = u1Old - t1 * s.x;// (sampVal1 - divQ1 + s.x);
-	d_u2[idxc] = u2Old - t2 * s.y;// (sampVal2 - divQ2 + s.y);
+	d_u1[idxc] = u1Old - t1 * (-divQ1 + s.x);// (sampVal1 - divQ1 + s.x);
+	d_u2[idxc] = u2Old - t2 * (-divQ2 + s.y);// (sampVal2 - divQ2 + s.y);
+}
+
+__global__ void checkB(float* out, float* d_r, float* d_u1, float* d_u2, float* d_v1, float* d_v2, int w, int h) {
+	// get current thread index (x, y, c)
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
+	int c = threadIdx.z;
+
+	// return if coordinate (x, y) not inside image
+	if (x >= w || y >= h) {
+		return;
+	}
+
+	// index for image pixel access without color channel
+	int idx = x + y * w;
+	// index for image pixel access with color channel
+	int idxc = idx + c * w * h;
+
+	// previous r, u1, u2, v1, v2
+	float rOld = d_r[idxc];
+	float u1Old = d_u1[idxc];
+	float u2Old = d_u2[idxc];
+	float v1 = d_v1[idx];
+	float v2 = d_v2[idx];
+
+	// apply operator B_flow
+	float rDual = applyBflow(d_u1, d_u2, v1, v2, x, y, c, w, h);
+
+	// apply operator B_flow^T
+	float2 uDual = applyBflowTranspose(d_r, v1, v2, x, y, c, w, h);
+
+	// write absolute difference into result image -> should be 0.0 if correct
+	out[idxc] = fabsf(rDual * d_r[idxc] - uDual.x * d_u1[idxc] + uDual.y * d_u2[idxc]);
 }

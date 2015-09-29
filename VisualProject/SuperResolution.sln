@@ -11,6 +11,8 @@ Global
 		Debug|x64 = Debug|x64
 		Release|Win32 = Release|Win32
 		Release|x64 = Release|x64
+		ScaleBlurTests|Win32 = ScaleBlurTests|Win32
+		ScaleBlurTests|x64 = ScaleBlurTests|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{F24EA052-637E-4E68-B7FE-7E6D23980167}.Debug|Win32.ActiveCfg = Debug|Win32
@@ -21,6 +23,10 @@ Global
 		{F24EA052-637E-4E68-B7FE-7E6D23980167}.Release|Win32.Build.0 = Release|Win32
 		{F24EA052-637E-4E68-B7FE-7E6D23980167}.Release|x64.ActiveCfg = Release|x64
 		{F24EA052-637E-4E68-B7FE-7E6D23980167}.Release|x64.Build.0 = Release|x64
+		{F24EA052-637E-4E68-B7FE-7E6D23980167}.ScaleBlurTests|Win32.ActiveCfg = ScaleBlurTests|Win32
+		{F24EA052-637E-4E68-B7FE-7E6D23980167}.ScaleBlurTests|Win32.Build.0 = ScaleBlurTests|Win32
+		{F24EA052-637E-4E68-B7FE-7E6D23980167}.ScaleBlurTests|x64.ActiveCfg = ScaleBlurTests|x64
+		{F24EA052-637E-4E68-B7FE-7E6D23980167}.ScaleBlurTests|x64.Build.0 = ScaleBlurTests|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

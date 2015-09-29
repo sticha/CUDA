@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CudaCompile Include="divergence.cu" />
+    <CudaCompile Include="energy.cu" />
+    <CudaCompile Include="flow_color.cu" />
+    <CudaCompile Include="helper.cu" />
+    <CudaCompile Include="imageTransform.cu" />
+    <CudaCompile Include="main.cu" />
+    <CudaCompile Include="projections.cu" />
+    <CudaCompile Include="update.cu" />
+    <CudaCompile Include="updateSuperResolution.cu" />
+    <CudaCompile Include="ScaleBlurTests.cu">
+      <Filter>test</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="divergence.h" />
+    <ClInclude Include="energy.h" />
+    <ClInclude Include="flow_color.h" />
+    <ClInclude Include="helper.h" />
+    <ClInclude Include="helper_math.h" />
+    <ClInclude Include="imageTransform.h" />
+    <ClInclude Include="projections.h" />
+    <ClInclude Include="update.h" />
+    <ClInclude Include="updateSuperResolution.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="test">
+      <UniqueIdentifier>{01eb2cbe-8d28-4215-b7c2-a9967b59ee54}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

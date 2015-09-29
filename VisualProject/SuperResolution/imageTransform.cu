@@ -57,6 +57,25 @@ __global__ void upsample(float* in_small, float* out_big, int w, int h){
 	}
 }
 
+// Kernel to sample the input images up for initialization of the u_i
+__global__ void initialUpsample(float* in, float* out, int w, int h, int w_small, int h_small) {
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
+	int c = threadIdx.z;
+
+	// return if pixel outside image
+	if (x >= w || y >= h) {
+		return;
+	}
+
+	// get pixel coordinates of input image
+	int x_small = x * w_small / w;
+	int y_small = y * h_small / h;
+
+	// get pixel value of input image
+	out[x + y * w + c * w * h] = in[x_small + y_small * w_small + c * w_small * h_small];
+}
+
 __device__ float d_downsample(float* in, int x_small, int y_small, int c, int w_small, int h_small) {
 	int x_big = x_small << 1;
 	int y_big = y_small << 1;

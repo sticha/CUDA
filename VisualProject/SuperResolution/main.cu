@@ -243,13 +243,13 @@ void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_sma
 	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
 
 	// Upsample f to v_p (temporary result) and blur v_p to u
-	upsample<<<grid3d, block3d>>>(data.d_f1, data.d_v_p, w_small, h_small);
+	initialUpsample<<<grid3d, block3d>>>(data.d_f1, data.d_v_p, w, h, w_small, h_small);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_v_p, data.d_u1, w, h);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
-	upsample<<<grid3d, block3d>>>(data.d_f2, data.d_v_p, w_small, h_small);
+	initialUpsample<<<grid3d, block3d>>>(data.d_f2, data.d_v_p, w, h, w_small, h_small);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_v_p, data.d_u2, w, h);

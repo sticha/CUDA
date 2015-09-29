@@ -21,6 +21,9 @@ __global__ void downsample(float* in, float* out, int w, int h);
 __global__ void upsample(float* in, float* out, int w, int h);
 
 
+// Kernel to sample the input images up for initialization of the u_i
+__global__ void initialUpsample(float* in, float* out, int w, int h, int w_small, int h_small);
+
 //__global__ void blur(float *in, float *out, int w, int h, float kernelDia);
 
 __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, int h_big);

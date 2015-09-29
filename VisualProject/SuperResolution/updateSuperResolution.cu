@@ -203,8 +203,8 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float* d_
 	//float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
 
 	// update step
-	d_u1[idxc] = u1Old - t1 * (-divQ1 + s.x);// (sampVal1 - divQ1 + s.x);
-	d_u2[idxc] = u2Old - t2 * (-divQ2 + s.y);// (sampVal2 - divQ2 + s.y);
+	d_u2[idxc] = u2Old - t2 * (d_Atp2[idxc] - divQ2 + s.y);
+	d_u1[idxc] = u1Old - t1 * (d_Atp1[idxc] - divQ1 + s.x);
 }
 
 __global__ void checkB(float* out, float* d_r, float* d_u1, float* d_u2, float* d_v1, float* d_v2, int w, int h) {

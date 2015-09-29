@@ -529,12 +529,12 @@ int main(int argc, char **argv) {
 	cout << "alpha: " << alpha << endl;
 
 	// Value for tuning the total variation of the high resolution images
-	float beta = 0.001f;
+	float beta = 0.01f;
 	getParam("beta", beta, argc, argv);
 	cout << "beta: " << beta << endl;
 
 	// Value for tuning the importance of the flow constraint
-	float gamma = 10.f;
+	float gamma = 8.f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
 
@@ -701,7 +701,7 @@ int main(int argc, char **argv) {
 		// Initialize arrays with start values
 		InitializeGPUData(imgIn[0], imgIn[1], data, w, h, w_small, h_small, nc);
 		// Alternating optimization of flow field and super resolution images
-		for (int i = 0; i < 1; i++) {
+		for (int i = 0; i < 20; i++) {
 			// Compute flow estimation
 			calculateFlow(data, gamma, iterations, w, h, nc);
 			// Compute super resolution

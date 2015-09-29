@@ -41,7 +41,7 @@ __global__ void downsample(float* in_big, float* out_small, int w, int h, int w_
 	int ind_big = x_big + y_big * w + c * w * h;
 	int ind_small = x + y * w_small + c * w_small * h_small;
 
-	out_small[ind_small] = in_big[ind_big];
+	out_small[ind_small] = 0.25f * in_big[ind_big] + 0.25f * in_big[ind_big+1] + 0.25f * in_big[ind_big+w] + 0.25f * in_big[ind_big+w+1];
 }
 
 __global__ void upsample(float* in_small, float* out_big, int w, int h, int w_small, int h_small) {
@@ -62,11 +62,11 @@ __global__ void upsample(float* in_small, float* out_big, int w, int h, int w_sm
 	int ind_big = x + y * w + c * w * h;
 	int ind_small = x_small + y_small * w_small + c * w_small * h_small;
 
-	if ((x & 1) == 1 || (y & 1) == 1) {
-		out_big[ind_big] = 0.0f;
-	} else {
-		out_big[ind_big] = in_small[ind_small];
-	}
+	//if ((x & 1) == 1 || (y & 1) == 1) {
+	//	out_big[ind_big] = 0.0f;
+	//} else {
+		out_big[ind_big] = 0.25f * in_small[ind_small];
+	//}
 }
 
 // Kernel to sample the input images up for initialization of the u_i
@@ -152,9 +152,20 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 
 // For a 1 dimensional 5 pixel gaussian blur kernel with sigma = 1.2 you have the weights [GK5_2, GK5_1, GK5_0, GK5_1, GK5_2]
 
-#define GK5_0 0.3434064786f
-#define GK5_1 0.2426675967f
-#define GK5_2 0.0856291639f
+// sigma = 1.2
+//#define GK5_0 0.3434064786f
+//#define GK5_1 0.2426675967f
+//#define GK5_2 0.0856291639f
+
+// sigma = 0.8
+#define GK5_0 0.4991164165f
+#define GK5_1 0.2285121468f
+#define GK5_2 0.0219296448f
+
+// sigma = 0.6
+//#define GK5_0 0.6638183293f
+//#define GK5_1 0.1655245666f
+//#define GK5_2 0.0025662686f
 
 __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	// shared memory for optimized memory access

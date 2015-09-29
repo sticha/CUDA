@@ -168,18 +168,34 @@ r^{k+1}&=\proj_G\left(r^{k} + \sigma_r B_{flow}\begin{pmatrix}u_1^k \\ u_2^k\end
 u_i^{k+1}&=u_i^k-\tau_i(A^T\bar p_i^{k+1}-div(\bar q_i^{k+1})+\underbrace{(B_{flow}^T\bar r^{k+1})_i}_{s_i}), \\
 \end{aligned}
 \end{equation}
-For implementation issues the operator $B_{flow}$ can be further decomposed:
+For implementation issues the operator $B_{flow}$ can be further decomposed using central differences for $\nabla u$:
 \begin{equation}
-r^{k+1}(x) = \proj_G(r^{k}(x) + \sigma_r(u_1^k(x)-u_2^k(x)-(\partial_xu_2^kv^1)(x)-(\partial_yu_2^kv^2)(x))
+r^{k+1}(x) = \proj_G(r^{k}(x) + \sigma_r(u_1^k(x)-u_2^k(x)-(\partial^c_x u_2^kv^1)(x)-(\partial^c_y u_2^kv^2)(x))
 \end{equation}
-In the same way we can apply $B_{flow}^T$ having dirichlet boundary conditions for the derivatives:
+In the same way we can apply $B_{flow}^T$ having Dirichlet boundary conditions for the derivatives which are an adapted form of central differences:
 \begin{equation}
-s_i =
+s_i(x, y) =
 \begin{cases}
 \bar r^{k+1} & i=1 \\
--\bar r^{k+1} + v^1\partial^-_x\bar r^{k+1} + v^2\partial^-_y \bar r^{k+1} & i=2
+-\bar r^{k+1} - \partial^{-c}_{x, v^1}\bar r^{k+1} (x, y) - \partial^{-c}_{y, v^2} \bar r^{k+1} (x, y) & i=2
 \end{cases}
 \end{equation}
+\begin{equation}
+\partial^{-c}_{x, v^1} \bar r^{k+1} (x, y) =
+\begin{cases}
+-\frac{1}{2} (\bar r^{k+1} v^1)(x+1, y) & x \leq 1 \\
+\frac{1}{2} (\bar r^{k+1} v^1)(x-1, y) & x \geq W - 2 \\
+\frac{1}{2} \left((\bar r^{k+1} v^1)(x-1, y) - (\bar r^{k+1} v^1)(x+1, y)\right) & else
+\end{cases}
+\end{equation}
+\begin{equation}
+\partial^{-c}_{y, v^2} \bar r^{k+1} (x, y) =
+\begin{cases}
+-\frac{1}{2} (\bar r^{k+1} v^2)(x, y+1) & y \leq 1 \\
+\frac{1}{2} (\bar r^{k+1} v^2)(x, y-1) & y \geq H - 2 \\
+\frac{1}{2} \left((\bar r^{k+1} v^2)(x, y-1) - (\bar r^{k+1} v^2)(x, y+1)\right) & else
+\end{cases}
+\end{equation}\\\\
 The used sets for the dual variables are defined as:
 \begin{equation}
 \begin{aligned}

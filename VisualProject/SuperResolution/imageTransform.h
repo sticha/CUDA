@@ -10,7 +10,7 @@
  * w and h are for the input (big) image
  * w and h are assumed to be multiples of 2
 **/
-__global__ void downsample(float* in, float* out, int w, int h);
+__global__ void downsample(float* in, float* out, int w, int h, int w_small, int h_small);
 
 /**
  * To be called with one thread per pixel of the output (big) image!
@@ -18,7 +18,7 @@ __global__ void downsample(float* in, float* out, int w, int h);
  * analogously to the downsample function
  * w and h of the input (small) image
 **/
-__global__ void upsample(float* in, float* out, int w, int h);
+__global__ void upsample(float* in, float* out, int w, int h, int w_small, int h_small);
 
 
 // Kernel to sample the input images up for initialization of the u_i

@@ -23,42 +23,55 @@ void getNormalizedKernel(float* kernel, float sigma, int diameter){
 	}
 }
 
-__global__ void downsample(float* in_big, float* out_small, int w, int h) {
+__global__ void downsample(float* in_big, float* out_small, int w, int h, int w_small, int h_small) {
+	// indices for low resolution image access
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
-	int w_small = w / 2;
-	int h_small = h / 2;
-	if (x >= w_small || y >= h_small) return;
 
-	int ind_big = x * 2 + y * 2 * w + w*h*c;
-	int ind_small = x + y*w_small + c*w_small*h_small;
+	int x_big = x * 2;
+	int y_big = y * 2;
+
+	// return if pixel outside image
+	if (x >= w_small || y >= h_small) {
+		return;
+	}
+
+	// indices to access pixel
+	int ind_big = x_big + y_big * w + c * w * h;
+	int ind_small = x + y * w_small + c * w_small * h_small;
+
 	out_small[ind_small] = in_big[ind_big];
 }
 
-
-
-
-
-__global__ void upsample(float* in_small, float* out_big, int w, int h){
+__global__ void upsample(float* in_small, float* out_big, int w, int h, int w_small, int h_small) {
+	// indices for high resolution image access
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
-	int w_big = 2 * w;
-	int h_big = 2 * h;
-	if (x >= w_big || y >= h_big) return;
 
-	int ind_big = x + y * w_big + w_big * h_big * c;
-	if (x % 2 == 1 || y % 2 == 1) {
-		out_big[ind_big] = 0.f;
+	int x_small = x / 2;
+	int y_small = y / 2;
+
+	// return if pixel outside image
+	if (x >= w || y >= h) {
+		return;
+	}
+
+	// indices to access pixel
+	int ind_big = x + y * w + c * w * h;
+	int ind_small = x_small + y_small * w_small + c * w_small * h_small;
+
+	if ((x & 1) == 1 || (y & 1) == 1) {
+		out_big[ind_big] = 0.0f;
 	} else {
-		int ind_small = x/2 + (y/2)*w + w*h*c;
 		out_big[ind_big] = in_small[ind_small];
 	}
 }
 
 // Kernel to sample the input images up for initialization of the u_i
 __global__ void initialUpsample(float* in, float* out, int w, int h, int w_small, int h_small) {
+	// indices for image access
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -155,13 +168,13 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 
 	int sindex = threadIdx.x + 2 + (threadIdx.y + 2) * wb;
 	int index = x + y * w + c * w * h;
-	bool realPixel = (x >= 0 && x < w && y >= 0 && y < h);
+	bool realPixel = (x < w && y < h);
 
 	// fill shared memory (area covered by this block + 2 pixel of additional border)
 	float accum;
 	for (int si = threadIdx.x + threadIdx.y * blockDim.x; si < wb*(blockDim.y + 4); si += blockDim.x * blockDim.y) {
-		int inX = min(w-1, max(0, blockIdx.x * blockDim.x - 2 + si % wb));
-		int inY = min(h-1, max(0, blockIdx.y * blockDim.y - 2 + si / wb));
+		int inX = min(w-1, max(0, blockIdx.x * blockDim.x - 2 + (si % wb)));
+		int inY = min(h-1, max(0, blockIdx.y * blockDim.y - 2 + (si / wb)));
 		accum = in[inX + inY * w + c * w * h];
 		sdata[si] = accum;
 	}
@@ -175,8 +188,8 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 		accum = sdata[sindex - 2] * GK5_2 + sdata[sindex - 1] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + 1] * GK5_1 + sdata[sindex + 2] * GK5_2;
 
 		// for the subsequent vertical blur two additional lines at top and bottom of the block have to be blurred as well
-		if (y <= 1 || y >= h - 2) {
-			int shiftIndex = sindex + (y > 1 ? 2 : -2) * wb;
+		if (threadIdx.y <= 1 || threadIdx.y >= blockDim.y - 2) {
+			int shiftIndex = sindex + (threadIdx.y > 1 ? 2 : -2) * wb;
 			accum2 = sdata[shiftIndex - 2] * GK5_2 + sdata[shiftIndex - 1] * GK5_1 + sdata[shiftIndex] * GK5_0 + sdata[shiftIndex + 1] * GK5_1 + sdata[shiftIndex + 2] * GK5_2;
 		}
 	}
@@ -187,8 +200,8 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	if (realPixel) {
 		// store blurred pixels into shared memory
 		sdata[sindex] = accum;
-		if (y <= 1 || y >= h - 2) {
-			sdata[sindex + (y > 1 ? 2 : -2) * wb] = accum2;
+		if (threadIdx.y <= 1 || threadIdx.y >= blockDim.y - 2) {
+			sdata[sindex + (threadIdx.y > 1 ? 2 : -2) * wb] = accum2;
 		}
 	}
 

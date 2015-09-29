@@ -2,7 +2,7 @@
 #include "imageTransform.h"
 #include <iostream>
 
-
+//#define SCALAR_PRODUCT_GPU
 
 using namespace std;
 
@@ -14,9 +14,10 @@ __global__ void initArrayFixValues(float* array, int w, int h) {
 	if (x >= w || y >= h) return;
 
 	int ind = x + y*w + c*w*h;
-	array[ind] = (ind % 2)+1;
+	array[ind] = ((ind % 2)+0.9f)/2.f;
 }
 
+#ifdef SCALAR_PRODUCT_GPU
 __global__ void d_scalarProduct(float* a, float* b, float* blockRes, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -29,6 +30,7 @@ __global__ void d_scalarProduct(float* a, float* b, float* blockRes, int w, int 
 	float result = a[ind] * b[ind];
 	atomicAdd(&blockRes[ind_out], result);
 }
+#endif
 
 void execA_U(dim3 grid3d, dim3 grid3d_small, dim3 block3d, float* u, float* Au, int w_small, int w_big, int h_small, int h_big, int nc){
 	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
@@ -65,6 +67,8 @@ void execAt_v(dim3 grid3d, dim3 block3d, float* v, float* Atv, int w_small, int 
 }
 
 long float scalarProduct(dim3 block3d, dim3 grid3d, float* a, float* b, int w, int h, int nc) {
+	long float result = 0.f;
+#ifdef SCALAR_PRODUCT_GPU
 	float* blockResult;
 	float* blockResult_local;
 	int blockResultSize = block3d.x*block3d.y*block3d.z;
@@ -73,28 +77,30 @@ long float scalarProduct(dim3 block3d, dim3 grid3d, float* a, float* b, int w, i
 
 	d_scalarProduct<<<grid3d, block3d>>>(a, b, blockResult, w, h);
 	cudaDeviceSynchronize();
-	//float* a_local, *b_local;
-	//a_local = (float*)malloc(w*h * nc * sizeof(float));
-	//b_local = (float*)malloc(w*h * nc * sizeof(float));
-	//cudaMemcpy(a_local, a, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
-	//cudaMemcpy(b_local, b, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
-	//CUDA_CHECK;
 
 	cudaMemcpy(blockResult_local, blockResult, blockResultSize*sizeof(float), cudaMemcpyDeviceToHost);
 	CUDA_CHECK;
 	cudaFree(blockResult);
 	CUDA_CHECK;
 
-	long float result = 0.f;
 	for (int i = 0; i < blockResultSize; i++) {
 		result += blockResult_local[i];
 	}
-	//for (int i = 0; i < w*h * nc; i++) {
-	//	result += a_local[i] * b_local[i];
-	//}
 	free(blockResult_local);
-	//free(a_local);
-	//free(b_local);
+#else
+	float* a_local, *b_local;
+	a_local = (float*)malloc(w*h * nc * sizeof(float));
+	b_local = (float*)malloc(w*h * nc * sizeof(float));
+	cudaMemcpy(a_local, a, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(b_local, b, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+
+	for (int i = 0; i < w*h * nc; i++) {
+		result += a_local[i] * b_local[i];
+	}
+	free(a_local);
+	free(b_local);
+#endif
 	return result;
 }
 

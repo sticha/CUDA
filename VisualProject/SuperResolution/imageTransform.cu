@@ -138,16 +138,10 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 }
 
 // For a 1 dimensional 5 pixel gaussian blur kernel with sigma = 1.2 you have the weights [GK5_2, GK5_1, GK5_0, GK5_1, GK5_2]
-// Close to a border one part of the kernel might be unused so that the weights have to be renormalized (sum(w_i) = 1)
-// Possible partial kernels with 4 or 3 pixels:
-// [GK5_1, GK5_0, GK5_1, GK5_2] * GK5_AREA_4, [GK5_2, GK5_1, GK5_0, GK5_1] * GK5_AREA_4,
-// [GK5_0, GK5_1, GK5_2] * GK5_AREA_3, [GK5_2, GK5_1, GK5_0] * GK5_AREA_3
 
 #define GK5_0 0.3434064786f
 #define GK5_1 0.2426675967f
 #define GK5_2 0.0856291639f
-#define GK5_AREA_3 1.4887526834f
-#define GK5_AREA_4 1.0936481792f
 
 __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	// shared memory for optimized memory access
@@ -166,12 +160,9 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	// fill shared memory (area covered by this block + 2 pixel of additional border)
 	float accum;
 	for (int si = threadIdx.x + threadIdx.y * blockDim.x; si < wb*(blockDim.y + 4); si += blockDim.x * blockDim.y) {
-		int inX = blockIdx.x * blockDim.x - 2 + si % wb;
-		int inY = blockIdx.y * blockDim.y - 2 + si / wb;
-		accum = 0.0f;
-		if (inX >= 0 && inX < w && inY >= 0 && inY < h) {
-			accum = in[inX + inY * w + c * w * h];
-		}
+		int inX = min(w-1, max(0, blockIdx.x * blockDim.x - 2 + si % wb));
+		int inY = min(h-1, max(0, blockIdx.y * blockDim.y - 2 + si / wb));
+		accum = in[inX + inY * w + c * w * h];
 		sdata[si] = accum;
 	}
 
@@ -183,11 +174,6 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 		// blur horizontally
 		accum = sdata[sindex - 2] * GK5_2 + sdata[sindex - 1] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + 1] * GK5_1 + sdata[sindex + 2] * GK5_2;
 
-		if (x == 0 || x == w - 1) {
-			accum *= GK5_AREA_3;
-		} else if (x == 1 || x == w - 2) {
-			accum *= GK5_AREA_4;
-		}
 		// for the subsequent vertical blur two additional lines at top and bottom of the block have to be blurred as well
 		if (y <= 1 || y >= h - 2) {
 			int shiftIndex = sindex + (y > 1 ? 2 : -2) * wb;
@@ -212,12 +198,6 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	if (realPixel) {
 		// blur vertically
 		accum = sdata[sindex - 2 * wb] * GK5_2 + sdata[sindex - wb] * GK5_1 + sdata[sindex] * GK5_0 + sdata[sindex + wb] * GK5_1 + sdata[sindex + 2 * wb] * GK5_2;
-
-		if (y == 0 || y == h - 1) {
-			accum *= GK5_AREA_3;
-		} else if (y == 1 || y == h - 2) {
-			accum *= GK5_AREA_4;
-		}
 
 		// store result in output image
 		out[index] = accum;

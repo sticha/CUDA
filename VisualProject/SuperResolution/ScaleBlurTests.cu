@@ -2,6 +2,8 @@
 #include "imageTransform.h"
 #include <iostream>
 
+
+
 using namespace std;
 
 __global__ void initArrayFixValues(float* array, int w, int h) {
@@ -12,10 +14,10 @@ __global__ void initArrayFixValues(float* array, int w, int h) {
 	if (x >= w || y >= h) return;
 
 	int ind = x + y*w + c*w*h;
-	array[ind] = ind;
+	array[ind] = (ind % 2)+1;
 }
 
-/**__global__ void d_scalarProduct(float* a, float* b, float* blockRes, int w, int h) {
+__global__ void d_scalarProduct(float* a, float* b, float* blockRes, int w, int h) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -26,7 +28,7 @@ __global__ void initArrayFixValues(float* array, int w, int h) {
 
 	float result = a[ind] * b[ind];
 	atomicAdd(&blockRes[ind_out], result);
-}**/
+}
 
 void execA_U(dim3 grid3d, dim3 grid3d_small, dim3 block3d, float* u, float* Au, int w_small, int w_big, int h_small, int h_big, int nc){
 	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
@@ -63,44 +65,44 @@ void execAt_v(dim3 grid3d, dim3 block3d, float* v, float* Atv, int w_small, int 
 }
 
 long float scalarProduct(dim3 block3d, dim3 grid3d, float* a, float* b, int w, int h, int nc) {
-	//float* blockResult;
-	//float* blockResult_local;
-	//int blockResultSize = block3d.x*block3d.y*block3d.z;
-	//cudaMalloc(&blockResult, blockResultSize*sizeof(float));
-	//blockResult_local = (float*)malloc(blockResultSize*sizeof(float));
+	float* blockResult;
+	float* blockResult_local;
+	int blockResultSize = block3d.x*block3d.y*block3d.z;
+	cudaMalloc(&blockResult, blockResultSize*sizeof(float));
+	blockResult_local = (float*)malloc(blockResultSize*sizeof(float));
 
-	//d_scalarProduct<<<grid3d, block3d>>>(a, b, blockResult, w, h);
-	//cudaDeviceSynchronize();
-	float* a_local, *b_local;
-	a_local = (float*)malloc(w*h * nc * sizeof(float));
-	b_local = (float*)malloc(w*h * nc * sizeof(float));
-	cudaMemcpy(a_local, a, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(b_local, b, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+	d_scalarProduct<<<grid3d, block3d>>>(a, b, blockResult, w, h);
+	cudaDeviceSynchronize();
+	//float* a_local, *b_local;
+	//a_local = (float*)malloc(w*h * nc * sizeof(float));
+	//b_local = (float*)malloc(w*h * nc * sizeof(float));
+	//cudaMemcpy(a_local, a, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+	//cudaMemcpy(b_local, b, w*h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+	//CUDA_CHECK;
+
+	cudaMemcpy(blockResult_local, blockResult, blockResultSize*sizeof(float), cudaMemcpyDeviceToHost);
+	CUDA_CHECK;
+	cudaFree(blockResult);
 	CUDA_CHECK;
 
-	//cudaMemcpy(blockResult_local, blockResult, blockResultSize*sizeof(float), cudaMemcpyDeviceToHost);
-	//CUDA_CHECK;
-	//cudaFree(blockResult);
-	//CUDA_CHECK;
-
 	long float result = 0.f;
-	/**for (int i = 0; i < blockResultSize; i++) {
+	for (int i = 0; i < blockResultSize; i++) {
 		result += blockResult_local[i];
-	}**/
-	for (int i = 0; i < w*h * nc; i++) {
-		result += a_local[i] * b_local[i];
 	}
-	//free(blockResult_local);
-	free(a_local);
-	free(b_local);
+	//for (int i = 0; i < w*h * nc; i++) {
+	//	result += a_local[i] * b_local[i];
+	//}
+	free(blockResult_local);
+	//free(a_local);
+	//free(b_local);
 	return result;
 }
 
 int fixedSizeFixedValuesTestcase() {
 	cout << "-----------------------------" << endl;
 	cout << "fixedSizeFixedValuesTestcase." << endl;
-	const int w_small = 3;
-	const int h_small = 3;
+	const int w_small = 400;
+	const int h_small = 400;
 	const int w_big = 2 * w_small;
 	const int h_big = 2 * h_small;
 	const int nc = 3;
@@ -137,7 +139,16 @@ int fixedSizeFixedValuesTestcase() {
 	CUDA_CHECK;
 
 	bool success = false;
-	if (AuV == AtvU) {
+	float diff = 0;
+	if (AuV <= 0) AuV *= -1.f;
+	if (AtvU <= 0) AtvU *= -1.f;
+	if (AuV > AtvU) {
+		diff = AuV - AtvU;
+	} else {
+		diff = AtvU - AuV;
+	}
+	cout << "Difference: " << diff << endl;
+	if (diff <= 0.1f) {
 		success = true;
 		cout << "Test successfull." << endl;
 	} else {

@@ -6,7 +6,7 @@ project(SuperResolution)
 find_package(CUDA REQUIRED)
 
 # Set options for NVCC
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-arch sm_35)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-arch sm_35;-std=c++11)
 set(CUDA_SEPARABLE_COMPILATION ON)
 
 # Find all sourcecode files
@@ -14,6 +14,8 @@ file(GLOB sources
     "./VisualProject/SuperResolution/*.cu"
     "./VisualProject/SuperResolution/*.h"
     )
+file(GLOB test_sources "./VisualProject/SuperResolution/*Tests.cu")
+list(REMOVE_ITEM sources ${test_sources})
 
 # Compile sourcecode files
 cuda_add_executable(SuperResolution ${sources})

@@ -148,7 +148,7 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_small, int h_small, int nc) {
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
-
+	size_t n = w * h * nc;
 	// Fill arrays with 0
 	cudaMemset(data.d_v1, 0, w*h*sizeof(float));
 	CUDA_CHECK;
@@ -179,6 +179,23 @@ void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_sma
 	CUDA_CHECK;
 	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u2, w, h);
 	cudaDeviceSynchronize();
+	CUDA_CHECK;
+	// Initialize dual variables
+	cudaMemset(data.d_v_p, 0, w*h*nc*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(data.d_v_q1, 0, w*h*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(data.d_v_q2, 0, w*h*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(data.d_u_p1, 0, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(data.d_u_p2, 0, n_small*sizeof(float));
+	CUDA_CHECK;
+	cudaMemset(data.d_u_q1, 0, n*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(data.d_u_q2, 0, n*sizeof(float2));
+	CUDA_CHECK;
+	cudaMemset(data.d_u_r, 0, n*sizeof(float));
 	CUDA_CHECK;
 }
 
@@ -213,14 +230,6 @@ void freeGPUMemory(Data& data) {
 
 // Computes the flow field (v1, v2) for fixed images u1 and u2
 void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc) {
-	// Initialize dual variables
-	cudaMemset(data.d_v_p, 0, w*h*nc*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_v_q1, 0, w*h*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_v_q2, 0, w*h*sizeof(float2));
-	CUDA_CHECK;
-
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
@@ -285,18 +294,6 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 	// Helper values
 	int n = w*h*nc;
 	int n_small = w_small*h_small*nc;
-	
-	// Initialize dual variables
-	cudaMemset(data.d_u_p1, 0, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_p2, 0, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_q1, 0, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_q2, 0, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_r, 0, n*sizeof(float));
-	CUDA_CHECK;
 
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);

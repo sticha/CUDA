@@ -15,10 +15,14 @@ file(GLOB sources
     "./VisualProject/SuperResolution/*.h"
     )
 file(GLOB test_sources "./VisualProject/SuperResolution/*Tests.cu")
+file(GLOB normal_main "./VisualProject/SuperResolution/*ain.cu")
+set(test_build ${sources})
 list(REMOVE_ITEM sources ${test_sources})
+list(REMOVE_ITEM test_build ${normal_main})
 
 # Compile sourcecode files
 cuda_add_executable(SuperResolution ${sources})
+cuda_add_executable(runTests ${test_build})
 
 # Link executable against OpenCV
 target_link_libraries(
@@ -27,3 +31,8 @@ target_link_libraries(
     -lopencv_core
     )
 
+target_link_libraries(
+    runTests
+    -lopencv_highgui
+    -lopencv_core
+    )

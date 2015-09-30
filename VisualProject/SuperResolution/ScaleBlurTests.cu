@@ -66,8 +66,8 @@ void execAt_v(dim3 grid3d, dim3 block3d, float* v, float* Atv, int w_small, int 
 	CUDA_CHECK;
 }
 
-long float scalarProduct(dim3 block3d, dim3 grid3d, float* a, float* b, int w, int h, int nc) {
-	long float result = 0.f;
+float scalarProduct(dim3 block3d, dim3 grid3d, float* a, float* b, int w, int h, int nc) {
+	float result = 0.f;
 #ifdef SCALAR_PRODUCT_GPU
 	float* blockResult;
 	float* blockResult_local;
@@ -131,11 +131,11 @@ int fixedSizeFixedValuesTestcase() {
 	initArrayFixValues<<<grid3d, block3d>>>(u, w_big, h_big);
 
 	execA_U(grid3d, grid3d_small, block3d, u, Au, w_small, w_big, h_small, h_big, nc);
-	long float AuV = scalarProduct(block3d, grid3d_small, Au, v, w_small, h_small, nc);
+	float AuV = scalarProduct(block3d, grid3d_small, Au, v, w_small, h_small, nc);
 	cout << "<Au, v> = " << AuV << endl;
 
 	execAt_v(grid3d, block3d, v, Atv, w_small, w_big, h_small, h_big, nc);
-	long float AtvU = scalarProduct(block3d, grid3d, Atv, u, w_big, h_big, nc);
+	float AtvU = scalarProduct(block3d, grid3d, Atv, u, w_big, h_big, nc);
 	cout << "<(A^t)v, u> = " << AtvU << endl;
 
 	cudaFree(u);

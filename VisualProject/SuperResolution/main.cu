@@ -628,7 +628,7 @@ int main(int argc, char **argv) {
 		// Alternating optimization of flow field and super resolution images
 		for (int i = 0; i < 20; i++) {
 			// Compute flow estimation
-			//calculateFlow(data, gamma, iterations, w, h, nc);
+			calculateFlow(data, gamma, iterations, w, h, nc);
 			// Compute super resolution
 			calculateSuperResolution(data, iterations, alpha, beta, gamma, w, h, w_small, h_small, nc);
 		}

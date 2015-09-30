@@ -48,34 +48,30 @@ const int stdStartImg = 1;
 // struct to transport the pointer for data access on GPU memory
 struct Data {
 
-	float*	d_f1;		// [w_small * h_small * nc]: first low resolution input image f1
-	float*	d_f2;		// [w_small * h_small * nc]: second low resolution input image f2
+	float**	 d_f;		// [w_small * h_small * nc]: first low resolution input image f1
 
-	float*	d_u1;		// [w * h * nc]: first high resolution output image u1 (also used for intermediate results in optimization process)
-	float*	d_u2;		// [w * h * nc]: second high resolution output image u2 (also used for intermediate results in optimization process)
-	float*  d_Au;		// [w_small * h_small * nc]: Blurred and downsampled version of a high resolution image used for one update step
+	float**	 d_u;		// [w * h * nc]: first high resolution output image u1 (also used for intermediate results in optimization process)
+	float*   d_Au;		// [w_small * h_small * nc]: Blurred and downsampled version of a high resolution image used for one update step
 
-	float*	d_v1;		// [w * h]: x-direction of the final flow field v1 (also used for intermediate results in optimization process)
-	float*	d_v2;		// [w * h]: y-direction of the final flow field v2 (also used for intermediate results in optimization process)
+	float**	 d_v1;		// [w * h]: x-direction of the final flow field v1 (also used for intermediate results in optimization process)
+	float**	 d_v2;		// [w * h]: y-direction of the final flow field v2 (also used for intermediate results in optimization process)
 	
-	float*	d_b;		// [w * h * nc]: defined as b = u2 - u1 for fix u1, u2 while flow field optimization
-	float2*	d_A;		// [w * h * nc * 2]: defined as A = gradient(u2) for fix d_u2 while flow field optimization
+	float**	 d_b;		// [w * h * nc]: defined as b = u2 - u1 for fix u1, u2 while flow field optimization
+	float2** d_A;		// [w * h * nc * 2]: defined as A = gradient(u2) for fix d_u2 while flow field optimization
 
-	float*	d_v_p;		// [w * h * nc]: dual variable p used for maximization of <p, Av + b> in flow field optimization
-	float2*	d_v_q1;		// [w * h * 2]: dual variable q1 used for maximization of <q1, gradient(v1)> in flow field optimization
-	float2*	d_v_q2;		// [w * h * 2]: dual variable q2 used for maximization of <q2, gradient(v2)> in flow field optimization
+	float**	 d_v_p;		// [w * h * nc]: dual variable p used for maximization of <p, Av + b> in flow field optimization
+	float2** d_v_q1;		// [w * h * 2]: dual variable q1 used for maximization of <q1, gradient(v1)> in flow field optimization
+	float2** d_v_q2;		// [w * h * 2]: dual variable q2 used for maximization of <q2, gradient(v2)> in flow field optimization
 	
-	float*	d_u_p1;		// [w_small * h_small * nc]: dual variable p1 used for maximization of <p1, Au1 - f1> in super resolution optimization
-	float*	d_u_p2;		// [w_small * h_small * nc]: dual variable p2 used for maximization of <p2, Au2 - f2> in super resolution optimization
-	float*  d_u_Atp1;	// [w * h * nc]: Upsampled and Blurred version of p1
-	float*  d_u_Atp2;	// [w * h * nc]:     "      "      "       "    " p2
-	float2*	d_u_q1;		// [w * h * nc * 2]: dual variable q1 used for maximization of <q1, gradient(u1)> in super resolution optimization
-	float2*	d_u_q2;		// [w * h * nc * 2]: dual variable q2 used for maximization of <q2, gradient(u2)> in super resolution optimization
-	float*	d_u_r;		// [w * h * nc]: dual variable r used for maximization of <r, Bu> in super resolution optimization
+	float**	 d_u_p;		// [w_small * h_small * nc]: dual variable p1 used for maximization of <p1, Au1 - f1> in super resolution optimization
+	float**  d_u_Atp;	// [w * h * nc]: Upsampled and Blurred version of p1
+	float2** d_u_q;		// [w * h * nc * 2]: dual variable q1 used for maximization of <q1, gradient(u1)> in super resolution optimization
 
-	float*  d_temp_big;	// [w * h * nc]: Intermediate result of a big sized image
+	float**	 d_u_r;		// [w * h * nc]: dual variable r used for maximization of <r, Bu> in super resolution optimization
 
-	float* d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
+	float*   d_temp_big;	// [w * h * nc]: Intermediate result of a big sized image
+
+	float**  d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
 
 
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
@@ -88,148 +84,155 @@ struct Data {
 // Functions for GPU calculations
 
 // Allocate memory on GPU for all arrays that are used for calculation
-void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int nc, int colorBorder) {
+void allocateGPUMemory(Data& data, int numImgs, int w, int h, int w_small, int h_small, int nc, int colorBorder) {
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
 	size_t n = w*h*nc;
 	int wborder = w + 2 * colorBorder;
 	int hborder = h + 2 * colorBorder;
 
-	// # Allocate GPU memory
-	cudaMalloc(&data.d_f1, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_f2, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u1, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u2, n*sizeof(float));
-	CUDA_CHECK;
 	cudaMalloc(&data.d_temp_big, n*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_Au, n_small*sizeof(float));
 	CUDA_CHECK;
-	cudaMalloc(&data.d_v1, w*h*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_v2, w*h*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_b, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_v_p, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_A, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_v_q1, w*h*sizeof(float2));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_v_q2, w*h*sizeof(float2));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_flow, wborder*hborder * 3 * sizeof(float));
-	CUDA_CHECK;
+
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	cudaMalloc(&data.d_energy, sizeof(float));
 	CUDA_CHECK;
 #endif
-	cudaMalloc(&data.d_u_p1, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u_p2, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u_Atp1, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u_Atp2, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u_r, n*sizeof(float));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u_q1, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMalloc(&data.d_u_q2, n*sizeof(float2));
-	CUDA_CHECK;
+
+	data.d_f = new float*[numImgs];
+	data.d_u = new float*[numImgs];
+	data.d_v1 = new float*[numImgs - 1];
+	data.d_v2 = new float*[numImgs - 1];
+	data.d_b = new float*[numImgs - 1];
+	data.d_A = new float2*[numImgs-1];
+	data.d_v_p = new float*[numImgs - 1];
+	data.d_v_q1 = new float2*[numImgs - 1];
+	data.d_v_q2 = new float2*[numImgs - 1];
+	data.d_u_p = new float*[numImgs];
+	data.d_u_Atp = new float*[numImgs];
+	data.d_u_q = new float2*[numImgs];
+	data.d_u_r = new float*[numImgs - 1];
+	data.d_flow = new float*[numImgs];
+
+
+	for (int i = 0; i < numImgs; i++) {
+		// # Allocate GPU memory
+		cudaMalloc(&data.d_f[i], n_small*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_u[i], n*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_u_p[i], n_small*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_u_Atp[i], n*sizeof(float));
+		CUDA_CHECK;	
+		cudaMalloc(&data.d_u_q[i], n*sizeof(float2));
+		CUDA_CHECK;
+	}
+
+	for (int i = 0; i < numImgs - 1; i++) {
+		cudaMalloc(&data.d_v1[i], w*h*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_v2[i], w*h*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_b[i], n*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_v_p[i], n*sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_A[i], n*sizeof(float2));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_v_q1[i], w*h*sizeof(float2));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_v_q2[i], w*h*sizeof(float2));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_flow[i], wborder*hborder * 3 * sizeof(float));
+		CUDA_CHECK;
+		cudaMalloc(&data.d_u_r[i], n*sizeof(float));
+		CUDA_CHECK;
+	}
+	
 }
 
 // Initializes the arrays on GPU memory for optimization process
-void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_small, int h_small, int nc) {
+void InitializeGPUData(float** f, Data& data, int numImgs, int w, int h, int w_small, int h_small, int nc) {
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
 	size_t n = w * h * nc;
-	// Fill arrays with 0
-	cudaMemset(data.d_v1, 0, w*h*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_v2, 0, w*h*sizeof(float));
-	CUDA_CHECK;
-
-	// Copy images to GPU
-	cudaMemcpy(data.d_f1, f1, n_small * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(data.d_f2, f2, n_small * sizeof(float), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-
+	
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
 
 	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
+	for (int i = 0; i < numImgs; i++) {
+		cudaMemset(data.d_u_p[i], 0, n_small*sizeof(float));
+		CUDA_CHECK;
+		// Copy images to GPU
+		cudaMemcpy(data.d_f[i], f[i], n_small * sizeof(float), cudaMemcpyHostToDevice);
+		CUDA_CHECK;
+		// Upsample f to v_p (temporary result) and blur v_p to u
+		initialUpsample<<<grid3d, block3d>>>(data.d_f[i], data.d_temp_big, w, h, w_small, h_small);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u[i], w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 
-	// Upsample f to v_p (temporary result) and blur v_p to u
-	initialUpsample<<<grid3d, block3d>>>(data.d_f1, data.d_temp_big, w, h, w_small, h_small);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
-	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u1, w, h);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
-	initialUpsample<<<grid3d, block3d>>>(data.d_f2, data.d_temp_big, w, h, w_small, h_small);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
-	gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u2, w, h);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
-	// Initialize dual variables
-	cudaMemset(data.d_v_p, 0, w*h*nc*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_v_q1, 0, w*h*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_v_q2, 0, w*h*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_p1, 0, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_p2, 0, n_small*sizeof(float));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_q1, 0, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_q2, 0, n*sizeof(float2));
-	CUDA_CHECK;
-	cudaMemset(data.d_u_r, 0, n*sizeof(float));
-	CUDA_CHECK;
+		cudaMemset(data.d_u_q[i], 0, n*sizeof(float2));
+		CUDA_CHECK;
+	}
+
+	for (int i = 0; i < numImgs - 1; i++) {
+		// Fill arrays with 0
+		cudaMemset(data.d_v1[i], 0, w*h*sizeof(float));
+		CUDA_CHECK;
+		cudaMemset(data.d_v2[i], 0, w*h*sizeof(float));
+		CUDA_CHECK;
+		// Initialize dual variables
+		cudaMemset(data.d_v_p[i], 0, w*h*nc*sizeof(float));
+		CUDA_CHECK;
+		cudaMemset(data.d_v_q1[i], 0, w*h*sizeof(float2));
+		CUDA_CHECK;
+		cudaMemset(data.d_v_q2[i], 0, w*h*sizeof(float2));
+		CUDA_CHECK;
+		cudaMemset(data.d_u_r[i], 0, n*sizeof(float));
+		CUDA_CHECK;
+	}	
 }
 
 // Free all allocated GPU memory
-void freeGPUMemory(Data& data) {
-	cudaFree(data.d_f1);
-	cudaFree(data.d_f2);
-	cudaFree(data.d_u1);
-	cudaFree(data.d_u2);
+void freeGPUMemory(Data& data, int numImgs) {
 	cudaFree(data.d_Au);
-	cudaFree(data.d_v1);
-	cudaFree(data.d_v2);
-	cudaFree(data.d_b);
-	cudaFree(data.d_v_p);
-	cudaFree(data.d_A);
-	cudaFree(data.d_v_q1);
-	cudaFree(data.d_v_q2);
-	cudaFree(data.d_flow);
+	cudaFree(data.d_temp_big);
+	for (int i = 0; i < numImgs; i++) {
+		cudaFree(data.d_f[i]);
+		cudaFree(data.d_u[i]);
+		cudaFree(data.d_u_p[i]);
+		cudaFree(data.d_u_Atp[i]);
+		cudaFree(data.d_u_q[i]);
+	}
+	for (int i = 0; i < numImgs - 1; i++) {
+		cudaFree(data.d_b[i]);
+		cudaFree(data.d_v1[i]);
+		cudaFree(data.d_v2[i]);
+		cudaFree(data.d_v_p[i]);
+		cudaFree(data.d_A[i]);
+		cudaFree(data.d_v_q1[i]);
+		cudaFree(data.d_v_q2[i]);
+		cudaFree(data.d_flow[i]);
+		cudaFree(data.d_u_r[i]);
+	}
+	
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	cudaFree(data.d_energy);
 #endif
-	cudaFree(data.d_u_p1);
-	cudaFree(data.d_u_p2);
-	cudaFree(data.d_u_Atp1);
-	cudaFree(data.d_u_Atp2);
-	cudaFree(data.d_u_r);
-	cudaFree(data.d_u_q1);
-	cudaFree(data.d_u_q2);
-	cudaFree(data.d_temp_big);
+	
 	CUDA_CHECK;
 }
 
 // Computes the flow field (v1, v2) for fixed images u1 and u2
-void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc) {
+void calculateFlow(Data& data, int numImgs, float gamma, int iterations, int w, int h, int nc) {
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
@@ -243,36 +246,41 @@ void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc
 	int bytesSM1d = block1d.x * sizeof(float);
 #endif
 
-	// Compute b = u2 - u1
-	imageDiff<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_b, w, h);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
-	// Compute A = gradient(u2)
-	calculateGradientCD<<<grid3d, block3d>>>(data.d_u2, data.d_A, w, h, nc);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
+	for (int i = 0; i < numImgs - 1; i++) {
+		// Compute b = u2 - u1
+		imageDiff<<<grid3d, block3d>>>(data.d_u[i], data.d_u[i + 1], data.d_b[i], w, h);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+		// Compute A = gradient(u2)
+		calculateGradientCD<<<grid3d, block3d>>>(data.d_u[i + 1], data.d_A[i], w, h, nc);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
+	}
 
 	// Step sizes
 	float sigmaQ = 0.5f;
 
 	// Update in an alternating fashion the dual variables p, q1, q2 and the primal variable (flow field) v
 	for (int i = 0; i < iterations; i++) {
-		// Update dual variable p
-		flow_updateP<<<grid3d, block3d>>>(data.d_v_p, data.d_v1, data.d_v2, data.d_A, data.d_b, gamma, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable q1
-		flow_updateQ<<<grid2d, block2d>>>(data.d_v_q1, data.d_v1, sigmaQ, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable q2
-		flow_updateQ<<<grid2d, block2d>>>(data.d_v_q2, data.d_v2, sigmaQ, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update flow field v
-		flow_updateV<<<grid2d, block2d>>>(data.d_v1, data.d_v2, data.d_v_p, data.d_v_q1, data.d_v_q2, data.d_A, w, h, nc);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
+		
+		for (int i = 0; i < numImgs - 1; i++) {
+			// Update dual variable p
+			flow_updateP<<<grid3d, block3d>>>(data.d_v_p[i], data.d_v1[i], data.d_v2[i], data.d_A[i], data.d_b[i], gamma, w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Update dual variable q1
+			flow_updateQ<<<grid2d, block2d>>>(data.d_v_q1[i], data.d_v1[i], sigmaQ, w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Update dual variable q2
+			flow_updateQ<<<grid2d, block2d>> >(data.d_v_q2[i], data.d_v2[i], sigmaQ, w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Update flow field v
+			flow_updateV<<<grid2d, block2d>>>(data.d_v1[i], data.d_v2[i], data.d_v_p[i], data.d_v_q1[i], data.d_v_q2[i], data.d_A[i], w, h, nc);
+			cudaDeviceSynchronize();
+			CUDA_CHECK; 
+		}
 
 #ifdef FLOW_ENERGY
 		// Compute energy of latest flow field
@@ -290,7 +298,7 @@ void calculateFlow(Data& data, float gamma, int iterations, int w, int h, int nc
 }
 
 // Computes super resolution images u1, u2 for fixed flow field (v1, v2)
-void calculateSuperResolution(Data& data, int iterations, float alpha, float beta, float gamma, int w, int h, int w_small, int h_small, int nc) {
+void calculateSuperResolution(Data& data, int numImgs, int iterations, float alpha, float beta, float gamma, int w, int h, int w_small, int h_small, int nc) {
 	// Helper values
 	int n = w*h*nc;
 	int n_small = w_small*h_small*nc;
@@ -317,62 +325,43 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 
 	// Update in an alternating fashion the dual variables p1, p2, q1, q2, r and the primal variables (super resolution images) u1, u2
 	for (int i = 0; i < iterations; i++) {
-		// Blur u1
-		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u1, data.d_temp_big, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Downsample blurred u1
-		downsample<<<grid3d_small, block3d>>>(data.d_temp_big, data.d_Au, w, h, w_small, h_small);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable p1
-		super_updateP<<<grid3d_small, block3d>>>(data.d_u_p1, data.d_f1, data.d_Au, sigmaP, alpha, w_small, h_small);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Blur u2
-		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u2, data.d_temp_big, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Downsample blurred u2
-		downsample<<<grid3d_small, block3d>>>(data.d_temp_big, data.d_Au, w, h, w_small, h_small);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable p2
-		super_updateP<<<grid3d_small, block3d>>>(data.d_u_p2, data.d_f2, data.d_Au, sigmaP, alpha, w_small, h_small);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable q1
-		super_updateQ<<<grid3d, block3d>>>(data.d_u_q1, data.d_u1, sigmaQ, beta, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable q2
-		super_updateQ<<<grid3d, block3d>>>(data.d_u_q2, data.d_u2, sigmaQ, beta, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update dual variable r
-		super_updateR<<<grid3d, block3d>>>(data.d_u_r, data.d_u1, data.d_u2, data.d_v1, data.d_v2, gamma, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Upsample p1
-		upsample<<<grid3d, block3d>>>(data.d_u_p1, data.d_temp_big, w, h, w_small, h_small);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Blur upsampled p1
-		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u_Atp1, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Upsample p2
-		upsample<<<grid3d, block3d>>>(data.d_u_p2, data.d_temp_big, w, h, w_small, h_small);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Blur upsampled p2
-		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u_Atp2, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
-		// Update super resolution images u1, u2
-		super_updateU<<<grid3d, block3d>>>(data.d_u1, data.d_u2, data.d_u_r, data.d_u_Atp1, data.d_u_Atp2, data.d_u_q1, data.d_u_q2, data.d_v1, data.d_v2, w, h);
-		cudaDeviceSynchronize();
-		CUDA_CHECK;
+		for (int i = 0; i < numImgs; i++) {
+			// Blur u1
+			gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u[i], data.d_temp_big, w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Downsample blurred u1
+			downsample<<<grid3d_small, block3d>>>(data.d_temp_big, data.d_Au, w, h, w_small, h_small);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Update dual variable p1
+			super_updateP<<<grid3d_small, block3d>>>(data.d_u_p[i], data.d_f[i], data.d_Au, sigmaP, alpha, w_small, h_small);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Update dual variable q1
+			super_updateQ<<<grid3d, block3d>>>(data.d_u_q[i], data.d_u[i], sigmaQ, beta, w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Upsample p1
+			upsample<<<grid3d, block3d>>>(data.d_u_p[i], data.d_temp_big, w, h, w_small, h_small);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Blur upsampled p1
+			gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u_Atp[i], w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+		}
+		for(int i = 0; i < numImgs - 1;i++){
+			// Update dual variable r
+			super_updateR<<<grid3d, block3d>>>(data.d_u_r[i], data.d_u[i], data.d_u[i+1], data.d_v1[i], data.d_v2[i], gamma, w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+			// Update super resolution images u1, u2
+			super_updateU<<<grid3d, block3d>>>(data.d_u[i], data.d_u[i+1], data.d_u_r[i], data.d_u_Atp[i], data.d_u_Atp[i+1], data.d_u_q[i], data.d_u_q[i+1], data.d_v1[i], data.d_v2[i], w, h);
+			cudaDeviceSynchronize();
+			CUDA_CHECK;
+		}
+		
 		
 #ifdef SUPER_ENERGY
 		// Compute energy of latest super resolution
@@ -390,7 +379,7 @@ void calculateSuperResolution(Data& data, int iterations, float alpha, float bet
 }
 
 // Get the results from the calculation
-void getComputationResult(Data& data, float* v1, float* v2, float* flow, float* sr1, float* sr2, int w, int h, int nc, int colorBorder) {
+void getComputationResult(Data& data, int numImgs, float** v1, float** v2, float** flow, float** sr, int w, int h, int nc, int colorBorder) {
 	// Helper values
 	int wborder = w + 2 * colorBorder;
 	int hborder = h + 2 * colorBorder;
@@ -401,23 +390,25 @@ void getComputationResult(Data& data, float* v1, float* v2, float* flow, float* 
 
 	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
 
-	// Generate a color coding for the flow field
-	createColorCoding<<<grid2dborder, block2d>>>(data.d_v1, data.d_v2, data.d_flow, wborder, hborder, colorBorder);
-	//createColorCoding<<<grid2dborder, block2d>>>(data.d_u1, data.d_v1, data.d_v2, data.d_flow, wborder, hborder, nc, colorBorder);
-	cudaDeviceSynchronize();
-	CUDA_CHECK;
+	for (int i = 0; i < numImgs - 1; i++) {
+		// Generate a color coding for the flow field
+		createColorCoding<<<grid2dborder, block2d>>>(data.d_v1[i], data.d_v2[i], data.d_flow[i], wborder, hborder, colorBorder);
+		//createColorCoding<<<grid2dborder, block2d>>>(data.d_u1, data.d_v1, data.d_v2, data.d_flow, wborder, hborder, nc, colorBorder);
+		cudaDeviceSynchronize();
+		CUDA_CHECK;
 
-	// Copy results to Host
-	cudaMemcpy(v1, data.d_v1, w * h * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
-	cudaMemcpy(v2, data.d_v2, w * h * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
-	cudaMemcpy(flow, data.d_flow, wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
-	cudaMemcpy(sr1, data.d_u1, w * h * nc * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
-	cudaMemcpy(sr2, data.d_u2, w * h * nc * sizeof(float), cudaMemcpyDeviceToHost);
-	CUDA_CHECK;
+		// Copy results to Host
+		cudaMemcpy(v1[i], data.d_v1[i], w * h * sizeof(float), cudaMemcpyDeviceToHost);
+		CUDA_CHECK;
+		cudaMemcpy(v2[i], data.d_v2[i], w * h * sizeof(float), cudaMemcpyDeviceToHost);
+		CUDA_CHECK;
+		cudaMemcpy(flow[i], data.d_flow[i], wborder * hborder * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		CUDA_CHECK;
+	}
+	for (int i = 0; i < numImgs; i++) {
+		cudaMemcpy(sr[i], data.d_u[i], w * h * nc * sizeof(float), cudaMemcpyDeviceToHost);
+		CUDA_CHECK;
+	}
 }
 
 
@@ -554,9 +545,9 @@ int main(int argc, char **argv) {
 	int nc = mIn[0].channels();
 	cout << "input images: " << w_small << " x " << h_small << endl;
 
+	
 	// Set the output image format
-	cv::Mat mSR1(h, w, mIn[0].type());
-	cv::Mat mSR2(h, w, mIn[0].type());
+	cv::Mat mSR(h, w, mIn[0].type());
 	cv::Mat mFlow((h + 2 * colorBorder), (w + 2 * colorBorder), CV_32FC3);	
 	cv::Mat mV1(h, w, CV_32FC1);
 	cv::Mat mV2(h, w, CV_32FC1);
@@ -566,24 +557,31 @@ int main(int argc, char **argv) {
 	//cv::Mat mOut(h, w, CV_32FC1);    // mOut will be a grayscale image, 1 layer
 
 	// Allocate memory for an arbitary amount of input images
-	float **imgIn = new float*[numImgs];
+	float** imgIn = new float*[numImgs];
+	float** imgFlow = new float*[numImgs - 1];
+	float** imgV1 = new float*[numImgs - 1];
+	float** imgV2 = new float*[numImgs - 1];
+	float** imgSR = new float*[numImgs];
+
 	for (int i = 0; i < numImgs; i++){
 		imgIn[i] = new float[(size_t)(w_small*h_small*nc)];
+		imgSR[i] = new float[(size_t)w*h*mSR.channels()];
 	}
 
-	// Allocate memory for output images
-	float *imgFlow = new float[(size_t)(w+2*colorBorder)*(h+2*colorBorder)*mFlow.channels()];
-	float *imgV1 = new float[(size_t)w*h*mV1.channels()];
-	float *imgV2 = new float[(size_t)w*h*mV2.channels()];
-	float *imgSR1 = new float[(size_t)w*h*mSR1.channels()];
-	float *imgSR2 = new float[(size_t)w*h*mSR2.channels()];
+	for (int i = 0; i < numImgs - 1; i++) {
+		// Allocate memory for output images
+		imgFlow[i] = new float[(size_t)(w + 2 * colorBorder)*(h + 2 * colorBorder)*mFlow.channels()];
+		imgV1[i] = new float[(size_t)w*h*mV1.channels()];
+		imgV2[i] = new float[(size_t)w*h*mV2.channels()];
+	}
+	
 
 
 #ifdef CAMERA
 
 	Data data;
 	// Allocate memory for gpu arrays
-	allocateGPUMemory(data, w, h, w_small, h_small, nc, colorBorder);
+	allocateGPUMemory(data, w, h, 2, w_small, h_small, nc, colorBorder);
 
 	// Read a camera image frame every 30 milliseconds:
 	// cv::waitKey(30) waits 30 milliseconds for a keyboard input,
@@ -612,7 +610,7 @@ int main(int argc, char **argv) {
 
 		// Allocate memory for gpu arrays
 		Data data;
-		allocateGPUMemory(data, w, h, w_small, h_small, nc, colorBorder);
+		allocateGPUMemory(data, numImgs, w, h, w_small, h_small, nc, colorBorder);
 #endif
 
 		// Fetch time before calculation
@@ -621,16 +619,16 @@ int main(int argc, char **argv) {
 
 		// # Call the CUDA computation
 		// Initialize arrays with start values
-		InitializeGPUData(imgIn[0], imgIn[1], data, w, h, w_small, h_small, nc);
+		InitializeGPUData(imgIn, data, numImgs, w, h, w_small, h_small, nc);
 		// Alternating optimization of flow field and super resolution images
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < 1; i++) {
 			// Compute flow estimation
-			calculateFlow(data, gamma, iterations, w, h, nc);
+			calculateFlow(data, numImgs, gamma, iterations, w, h, nc);
 			// Compute super resolution
-			calculateSuperResolution(data, iterations, alpha, beta, gamma, w, h, w_small, h_small, nc);
+			calculateSuperResolution(data, numImgs, iterations, alpha, beta, gamma, w, h, w_small, h_small, nc);
 		}
 		// Get results from computation
-		getComputationResult(data, imgV1, imgV2, imgFlow, imgSR1, imgSR2, w, h, nc, colorBorder);
+		getComputationResult(data, numImgs, imgV1, imgV2, imgFlow, imgSR, w, h, nc, colorBorder);
 		
 		// Get time after calculation and compute duration
 		timer.end();
@@ -639,23 +637,27 @@ int main(int argc, char **argv) {
 		
 		// show input image
 #ifdef CAMERA
-		convert_layered_to_mat(mIn1, imgIn1);
+		convert_layered_to_mat(mIn[0], imgIn[0]);
 #endif
 		// Show input images
-		showImage("Input1", mIn[0], 100, 100);
-		showImage("Input2", mIn[1], 100, 100 + h_small + 50);
-
+		for (int i = 0; i < numImgs; i++) {
+			string name = "Input " + to_string(i);
+			showImage(name, mIn[i], 100, 100);
+			name = "Super Resolution " + to_string(i);
+			convert_layered_to_mat(mSR, imgSR[i]);
+			showImage(name, mSR, 100 + w_small + 40, 100);
+		}
+		
 		// Show all output images
-		convert_layered_to_mat(mSR1, imgSR1);
-		showImage("Super Resolution 1", mSR1, 100 + w_small + 40, 100);
-		convert_layered_to_mat(mSR2, imgSR2);
-		showImage("Super Resolution 2", mSR2, 100 + w_small + 40, 100);
-		convert_layered_to_mat(mV1, imgV1);
-		showImage("V1", (mV1 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
-		convert_layered_to_mat(mV2, imgV2);
-		showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
-		convert_layered_to_mat(mFlow, imgFlow);
-		showImage("Flow Field", mFlow, 100 + w_small + w + 80, 100);
+		for (int i = 0; i < numImgs - 1; i++) {
+			convert_layered_to_mat(mV1, imgV1[i]);
+			showImage("V1", (mV1 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
+			convert_layered_to_mat(mV2, imgV2[i]);
+			showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
+			convert_layered_to_mat(mFlow, imgFlow[i]);
+			showImage("Flow Field", mFlow, 100 + w_small + w + 80, 100);
+		}
+		
 
 #ifdef CAMERA
 		// end of camera loop
@@ -664,7 +666,7 @@ int main(int argc, char **argv) {
 	freeGPUMemory(data);
 #else
 	// Free arrays on gpu memory
-	freeGPUMemory(data);
+	freeGPUMemory(data, numImgs);
 	// wait for key inputs
 	cv::waitKey(0);
 #endif

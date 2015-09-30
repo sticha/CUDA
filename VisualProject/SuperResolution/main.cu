@@ -35,8 +35,6 @@ const int stdNumDigits = 2;
 const int stdNumImgs = 2;
 const int stdStartImg = 1;
 
-extern __constant__ float blurKernel[];
-const int kernelDia = 5;
 // uncomment to use the camera
 // #define CAMERA
 
@@ -79,10 +77,6 @@ struct Data {
 
 	float* d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
 
-	cudaTextureObject_t *d_Tex_u1;
-	cudaTextureObject_t *d_Tex_u2;
-	cudaTextureObject_t *d_Tex_u_p1;
-	cudaTextureObject_t *d_Tex_u_p2;
 
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
 	float* d_energy;	// stores in a single value the energy of the previous calculated flow field
@@ -148,81 +142,12 @@ void allocateGPUMemory(Data& data, int w, int h, int w_small, int h_small, int n
 	CUDA_CHECK;
 	cudaMalloc(&data.d_u_q2, n*sizeof(float2));
 	CUDA_CHECK;
-
-	cudaChannelFormatDesc desc;
-	memset(&desc, 0, sizeof(cudaChannelFormatDesc));
-	desc.x = 32;
-	desc.f = cudaChannelFormatKindFloat;
-	
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(cudaResourceDesc));
-	resDesc.resType = cudaResourceTypePitch2D;
-	resDesc.res.pitch2D.desc = desc;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(cudaTextureDesc));
-	texDesc.filterMode = cudaFilterModeLinear;
-	texDesc.addressMode[0] = cudaAddressModeClamp;
-	texDesc.addressMode[1] = cudaAddressModeClamp;
-	texDesc.addressMode[2] = cudaAddressModeClamp;
-	texDesc.normalizedCoords = true;
-
-	cudaMalloc(&data.d_Tex_u1, nc * sizeof(cudaTextureObject_t));
-	cudaMalloc(&data.d_Tex_u2, nc * sizeof(cudaTextureObject_t));
-	cudaMalloc(&data.d_Tex_u_p1, nc * sizeof(cudaTextureObject_t));
-	cudaMalloc(&data.d_Tex_u_p2, nc * sizeof(cudaTextureObject_t));
-
-	cudaTextureObject_t *tempU1 = new cudaTextureObject_t[nc];
-	cudaTextureObject_t *tempU2 = new cudaTextureObject_t[nc];
-	cudaTextureObject_t *tempP1 = new cudaTextureObject_t[nc];
-	cudaTextureObject_t *tempP2 = new cudaTextureObject_t[nc];
-
-	for (int i = 0; i < nc; i++)
-	{
-		resDesc.res.pitch2D.devPtr = &data.d_u1[i * w * h];
-		resDesc.res.pitch2D.width = w;
-		resDesc.res.pitch2D.height = h;
-		resDesc.res.pitch2D.pitchInBytes = w * sizeof(float);
-
-		cudaCreateTextureObject(&tempU1[i], &resDesc, &texDesc, NULL);
-		CUDA_CHECK;
-
-		resDesc.res.pitch2D.devPtr = &data.d_u2[i * w * h];
-		cudaCreateTextureObject(&tempU2[i], &resDesc, &texDesc, NULL);
-		CUDA_CHECK;
-
-		resDesc.res.pitch2D.width = w_small;
-		resDesc.res.pitch2D.height = h_small;
-		resDesc.res.pitch2D.devPtr = &data.d_u_p1[i * w_small * h_small];
-		resDesc.res.pitch2D.pitchInBytes = w_small * sizeof(float);
-		cudaCreateTextureObject(&tempP1[i], &resDesc, &texDesc, NULL);
-		CUDA_CHECK;
-
-		resDesc.res.pitch2D.devPtr = &data.d_u_p2[i * w_small * h_small];
-		cudaCreateTextureObject(&tempP2[i], &resDesc, &texDesc, NULL);
-		CUDA_CHECK;
-	}
-
-	cudaMemcpy(data.d_Tex_u1, tempU1, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(data.d_Tex_u2, tempU2, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(data.d_Tex_u_p1, tempP1, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
-	cudaMemcpy(data.d_Tex_u_p2, tempP2, nc * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
-	CUDA_CHECK;
 }
 
 // Initializes the arrays on GPU memory for optimization process
 void InitializeGPUData(float* f1, float* f2, Data& data, int w, int h, int w_small, int h_small, int nc) {
 	// Helper values
 	size_t n_small = w_small*h_small*nc;
-
-	// Initialize BlurKernel for up/downsampling
-	float kernel[kernelDia];
-	getNormalizedKernel(kernel, 1.2f, kernelDia);
-	cudaMemcpyToSymbol(blurKernel, kernel, kernelDia*sizeof(float));
-	CUDA_CHECK;
 
 	// Fill arrays with 0
 	cudaMemset(data.d_v1, 0, w*h*sizeof(float));
@@ -544,7 +469,7 @@ int main(int argc, char **argv) {
 	cout << "color coding border: " << colorBorder << endl;
 
 	// Number of iterations for each update of the flow field and the super resolution images
-	float iterations = 200;
+	int iterations = 200;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
 
@@ -703,7 +628,7 @@ int main(int argc, char **argv) {
 		// Alternating optimization of flow field and super resolution images
 		for (int i = 0; i < 20; i++) {
 			// Compute flow estimation
-			calculateFlow(data, gamma, iterations, w, h, nc);
+			//calculateFlow(data, gamma, iterations, w, h, nc);
 			// Compute super resolution
 			calculateSuperResolution(data, iterations, alpha, beta, gamma, w, h, w_small, h_small, nc);
 		}

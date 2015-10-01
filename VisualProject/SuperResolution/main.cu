@@ -261,7 +261,7 @@ void calculateFlow(Data& data, int numImgs, float gamma, int iterations, int w, 
 	float sigmaQ = 0.5f;
 
 	// Update in an alternating fashion the dual variables p, q1, q2 and the primal variable (flow field) v
-	for (int i = 0; i < iterations; i++) {
+	for (int j = 0; j < iterations; j++) {
 		
 		for (int i = 0; i < numImgs - 1; i++) {
 			// Update dual variable p
@@ -273,7 +273,7 @@ void calculateFlow(Data& data, int numImgs, float gamma, int iterations, int w, 
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
 			// Update dual variable q2
-			flow_updateQ<<<grid2d, block2d>> >(data.d_v_q2[i], data.d_v2[i], sigmaQ, w, h);
+			flow_updateQ<<<grid2d, block2d>>>(data.d_v_q2[i], data.d_v2[i], sigmaQ, w, h);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
 			// Update flow field v
@@ -324,7 +324,7 @@ void calculateSuperResolution(Data& data, int numImgs, int iterations, float alp
 	float sigmaQ = 0.5f;
 
 	// Update in an alternating fashion the dual variables p1, p2, q1, q2, r and the primal variables (super resolution images) u1, u2
-	for (int i = 0; i < iterations; i++) {
+	for (int j = 0; j < iterations; j++) {
 		for (int i = 0; i < numImgs; i++) {
 			// Blur u1
 			gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u[i], data.d_temp_big, w, h);
@@ -350,14 +350,15 @@ void calculateSuperResolution(Data& data, int numImgs, int iterations, float alp
 			gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u_Atp[i], w, h);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
-		}
-		for(int i = 0; i < numImgs - 1;i++){
 			// Update dual variable r
-			super_updateR<<<grid3d, block3d>>>(data.d_u_r[i], data.d_u[i], data.d_u[i+1], data.d_v1[i], data.d_v2[i], gamma, w, h);
-			cudaDeviceSynchronize();
-			CUDA_CHECK;
+			if (i < numImgs - 1) {
+				super_updateR<<<grid3d, block3d>>>(data.d_u_r[i], data.d_u[i], data.d_u[i+1], data.d_v1[i], data.d_v2[i], gamma, w, h);
+				cudaDeviceSynchronize();
+				CUDA_CHECK;
+			}
 			// Update super resolution images u1, u2
-			super_updateU<<<grid3d, block3d>>>(data.d_u[i], data.d_u[i+1], data.d_u_r[i], data.d_u_Atp[i], data.d_u_Atp[i+1], data.d_u_q[i], data.d_u_q[i+1], data.d_v1[i], data.d_v2[i], w, h);
+			super_updateU<<<grid3d, block3d>>>(data.d_u[i], data.d_u_r[max(i-1, 0)], data.d_u_r[min(i, numImgs-2)], data.d_u_Atp[i],
+				data.d_u_q[i], data.d_v1[max(i-1, 0)], data.d_v2[max(i-1, 0)], w, h, i, numImgs);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
 		}
@@ -621,7 +622,7 @@ int main(int argc, char **argv) {
 		// Initialize arrays with start values
 		InitializeGPUData(imgIn, data, numImgs, w, h, w_small, h_small, nc);
 		// Alternating optimization of flow field and super resolution images
-		for (int i = 0; i < 1; i++) {
+		for (int i = 0; i < 20; i++) {
 			// Compute flow estimation
 			calculateFlow(data, numImgs, gamma, iterations, w, h, nc);
 			// Compute super resolution
@@ -655,7 +656,8 @@ int main(int argc, char **argv) {
 			convert_layered_to_mat(mV2, imgV2[i]);
 			showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + w_small + w + 80, 100);
 			convert_layered_to_mat(mFlow, imgFlow[i]);
-			showImage("Flow Field", mFlow, 100 + w_small + w + 80, 100);
+			string name = "Flow Field " + to_string(i);
+			showImage(name, mFlow, 100 + w_small + w + 80, 100);
 		}
 		
 

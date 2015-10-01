@@ -116,38 +116,45 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	d_r[idxc] = 2 * rNew - rOld;
 }
 
-__device__ float2 applyBflowTranspose(float* d_r, float* d_v1, float* d_v2, int x, int y, int c, int w, int h) {
+__device__ float applyBflowTranspose(float* d_r1, float* d_r2, float* d_v1, float* d_v2, int x, int y, int c, int w, int h, int imIndx, int nImgs) {
 	// index for image pixel access without color channel
 	int idx = x + y * w;
 	// index for image pixel access with color channel
 	int idxc = idx + c * w * h;
 
+	if (imIndx == 0) {
+		// first image
+		return d_r2[idxc];
+	}
+
 	// transpose operator of the central differences combined with v (-> with two pixel Dirichlet boundaries)
 	float difRx, difRy;
 	if (x <= 1) {
-		difRx = -0.5f * d_r[idxc + 1] * d_v1[idx + 1];
+		difRx = -0.5f * d_r1[idxc + 1] * d_v1[idx + 1];
 	} else if (x >= w - 2) {
-		difRx = 0.5f * d_r[idxc - 1] * d_v1[idx - 1];
+		difRx = 0.5f * d_r1[idxc - 1] * d_v1[idx - 1];
 	} else {
-		difRx = (d_r[idxc - 1] * d_v1[idx - 1] - d_r[idxc + 1] * d_v1[idx + 1]) / 2;
+		difRx = (d_r1[idxc - 1] * d_v1[idx - 1] - d_r1[idxc + 1] * d_v1[idx + 1]) / 2;
 	}
 	if (y <= 1) {
-		difRy = -0.5f * d_r[idxc + w] * d_v2[idx + w];
+		difRy = -0.5f * d_r1[idxc + w] * d_v2[idx + w];
 	} else if (y >= h - 2) {
-		difRy = 0.5f * d_r[idxc - w] * d_v2[idx - w];
+		difRy = 0.5f * d_r1[idxc - w] * d_v2[idx - w];
 	} else {
-		difRy = (d_r[idxc - w] * d_v2[idx - w] - d_r[idxc + w] * d_v2[idx + w]) / 2;
+		difRy = (d_r1[idxc - w] * d_v2[idx - w] - d_r1[idxc + w] * d_v2[idx + w]) / 2;
 	}
 
-	// compute s with the differences
-	float s1 = d_r[idxc];
-	float s2 = -d_r[idxc] - difRx - difRy;
+	if (imIndx == nImgs - 1) {
+		// last image
+		return -d_r1[idxc] - difRx - difRy;
+	}
 
-	return make_float2(s1, s2);
+	// intermediate images
+	return d_r2[idxc] - d_r1[idxc] - difRx - difRy;
 }
 
-__global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float* d_Atp1, float* d_Atp2,
-	float2 * d_q1, float2 * d_q2, float * d_v1, float * d_v2, int w, int h) {
+__global__ void super_updateU(float* d_u, float* d_r1, float* d_r2, float* d_Atp,
+	float2* d_q, float* d_v1, float* d_v2, int w, int h, int imIndx, int nImgs) {
 	// get current thread index (x, y, c)
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -164,21 +171,21 @@ __global__ void super_updateU(float * d_u1, float * d_u2, float * d_r, float* d_
 	int idxc = idx + c * w * h;
 	
 	// s = B_flow^T r
-	float2 s = applyBflowTranspose(d_r, d_v1, d_v2, x, y, c, w, h);
+	float s = applyBflowTranspose(d_r1, d_r2, d_v1, d_v2, x, y, c, w, h, imIndx, nImgs);
 
 	// div(q)
-	float divQ1 = divergence(d_q1, x, y, w, h, c);
-	float divQ2 = divergence(d_q2, x, y, w, h, c);
+	float divQ = divergence(d_q, x, y, w, h, c);
 
 	// compute step size tau
-	float t1 = 1.0f / 6.0f;
-	float t2 = 1.0f / (6.0f + 2 * fabsf(d_v1[idx]) + 2 * fabsf(d_v2[idx]));
-
-	// A^T*p
-	//float sampVal1 = d_upsample(d_p1, x, y, c, w, h);
-	//float sampVal2 = d_upsample(d_p2, x, y, c, w, h);
+	float tau;
+	if (imIndx == 0) {
+		tau = 1.0f / 6.0f;
+	} else if (imIndx == nImgs - 1) {
+		tau = 1.0f / (6.0f + 2 * fabsf(d_v1[idx]) + 2 * fabsf(d_v2[idx]));
+	} else {
+		tau = 1.0f / (7.0f + 2 * fabsf(d_v1[idx]) + 2 * fabsf(d_v2[idx]));
+	}
 
 	// update step
-	d_u1[idxc] = d_u1[idxc] - t1 * (d_Atp1[idxc] - divQ1 + s.x);
-	d_u2[idxc] = d_u2[idxc] - t2 * (d_Atp2[idxc] - divQ2 + s.y);
+	d_u[idxc] = d_u[idxc] - tau * (d_Atp[idxc] - divQ + s);
 }

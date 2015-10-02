@@ -7,7 +7,12 @@
 // ### Summer Semester 2015, September 7 - October 6
 // ###
 // ###
+// ### Course administrators:
 // ### Thomas Moellenhoff, Robert Maier, Caner Hazirbas
+// ###
+// ###
+// ### Course participants:
+// ### Philipp Krueger, Jonas Sticha, Sebastian Kümper
 // ###
 // ###
 // ###
@@ -48,34 +53,34 @@ const int stdStartImg = 1;
 // struct to transport the pointer for data access on GPU memory
 struct Data {
 
-	float**	 d_f;		// [w_small * h_small * nc]: first low resolution input image f1
+	float**	 d_f;			// [w_small * h_small * nc]: low resolution input images f
 
-	float**	 d_u;		// [w * h * nc]: first high resolution output image u1 (also used for intermediate results in optimization process)
-	float*   d_Au;		// [w_small * h_small * nc]: Blurred and downsampled version of a high resolution image used for one update step
+	float**	 d_u;			// [w * h * nc]: high resolution output images u (also used for intermediate results in optimization process)
+	float*   d_Au;			// [w_small * h_small * nc]: Blurred and downsampled version of a high resolution images used for one update step
 
-	float**	 d_v1;		// [w * h]: x-direction of the final flow field v1 (also used for intermediate results in optimization process)
-	float**	 d_v2;		// [w * h]: y-direction of the final flow field v2 (also used for intermediate results in optimization process)
+	float**	 d_v1;			// [w * h]: x-direction of the final flow field v1 (also used for intermediate results in optimization process)
+	float**	 d_v2;			// [w * h]: y-direction of the final flow field v2 (also used for intermediate results in optimization process)
 	
-	float**	 d_b;		// [w * h * nc]: defined as b = u2 - u1 for fix u1, u2 while flow field optimization
-	float2** d_A;		// [w * h * nc * 2]: defined as A = gradient(u2) for fix d_u2 while flow field optimization
+	float**	 d_b;			// [w * h * nc]: defined as b = u2 - u1 for fix u1, u2 while flow field optimization
+	float2** d_A;			// [w * h * nc * 2]: defined as A = gradient(u2) for fix d_u2 while flow field optimization
 
-	float**	 d_v_p;		// [w * h * nc]: dual variable p used for maximization of <p, Av + b> in flow field optimization
-	float2** d_v_q1;		// [w * h * 2]: dual variable q1 used for maximization of <q1, gradient(v1)> in flow field optimization
-	float2** d_v_q2;		// [w * h * 2]: dual variable q2 used for maximization of <q2, gradient(v2)> in flow field optimization
+	float**	 d_v_p;			// [w * h * nc]: dual variables p used for maximization of <p, Av + b> in flow field optimization
+	float2** d_v_q1;		// [w * h * 2]: dual variables q1 used for maximization of <q1, gradient(v1)> in flow field optimization
+	float2** d_v_q2;		// [w * h * 2]: dual variables q2 used for maximization of <q2, gradient(v2)> in flow field optimization
 	
-	float**	 d_u_p;		// [w_small * h_small * nc]: dual variable p1 used for maximization of <p1, Au1 - f1> in super resolution optimization
-	float**  d_u_Atp;	// [w * h * nc]: Upsampled and Blurred version of p1
-	float2** d_u_q;		// [w * h * nc * 2]: dual variable q1 used for maximization of <q1, gradient(u1)> in super resolution optimization
+	float**	 d_u_p;			// [w_small * h_small * nc]: dual variables p used for maximization of <p, Au - f> in super resolution optimization
+	float**  d_u_Atp;		// [w * h * nc]: Upsampled and Blurred version of p
+	float2** d_u_q;			// [w * h * nc * 2]: dual variables q used for maximization of <q, gradient(u)> in super resolution optimization
 
-	float**	 d_u_r;		// [w * h * nc]: dual variable r used for maximization of <r, Bu> in super resolution optimization
+	float**	 d_u_r;			// [w * h * nc]: dual variables r used for maximization of <r, Bu> in super resolution optimization
 
 	float*   d_temp_big;	// [w * h * nc]: Intermediate result of a big sized image
 
-	float**  d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow field as an output image
+	float**  d_flow;		// [(w + 2 * border) * (h + 2 * border) * 3]: stores the color coded final flow fields as output images
 
 
 #if defined(FLOW_ENERGY) || defined(SUPER_ENERGY)
-	float* d_energy;	// stores in a single value the energy of the previous calculated flow field
+	float* d_energy;		// stores in a single value the energy of the previous calculated flow fields or superresolution images
 #endif
 
 };
@@ -91,6 +96,7 @@ void allocateGPUMemory(Data& data, int numImgs, int w, int h, int w_small, int h
 	int wborder = w + 2 * colorBorder;
 	int hborder = h + 2 * colorBorder;
 
+	// Single arrays
 	cudaMalloc(&data.d_temp_big, n*sizeof(float));
 	CUDA_CHECK;
 	cudaMalloc(&data.d_Au, n_small*sizeof(float));
@@ -101,6 +107,7 @@ void allocateGPUMemory(Data& data, int numImgs, int w, int h, int w_small, int h
 	CUDA_CHECK;
 #endif
 
+	// Arrays of arrays
 	data.d_f = new float*[numImgs];
 	data.d_u = new float*[numImgs];
 	data.d_v1 = new float*[numImgs - 1];
@@ -118,7 +125,6 @@ void allocateGPUMemory(Data& data, int numImgs, int w, int h, int w_small, int h
 
 
 	for (int i = 0; i < numImgs; i++) {
-		// # Allocate GPU memory
 		cudaMalloc(&data.d_f[i], n_small*sizeof(float));
 		CUDA_CHECK;
 		cudaMalloc(&data.d_u[i], n*sizeof(float));
@@ -165,31 +171,32 @@ void InitializeGPUData(float** f, Data& data, int numImgs, int w, int h, int w_s
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
 
 	int smBytes = (block3d.x + 4) * (block3d.y + 4) * nc * sizeof(float);
+
 	for (int i = 0; i < numImgs; i++) {
-		cudaMemset(data.d_u_p[i], 0, n_small*sizeof(float));
-		CUDA_CHECK;
-		// Copy images to GPU
+		// Copy input images f to GPU
 		cudaMemcpy(data.d_f[i], f[i], n_small * sizeof(float), cudaMemcpyHostToDevice);
 		CUDA_CHECK;
-		// Upsample f to v_p (temporary result) and blur v_p to u
+		// Upsample and blur f to get initial high resolution images u
 		initialUpsample<<<grid3d, block3d>>>(data.d_f[i], data.d_temp_big, w, h, w_small, h_small);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u[i], w, h);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
-
+		// Fill dual variables p and q with 0
+		cudaMemset(data.d_u_p[i], 0, n_small*sizeof(float));
+		CUDA_CHECK;
 		cudaMemset(data.d_u_q[i], 0, n*sizeof(float2));
 		CUDA_CHECK;
 	}
 
 	for (int i = 0; i < numImgs - 1; i++) {
-		// Fill arrays with 0
+		// Initialize flow fields with 0
 		cudaMemset(data.d_v1[i], 0, w*h*sizeof(float));
 		CUDA_CHECK;
 		cudaMemset(data.d_v2[i], 0, w*h*sizeof(float));
 		CUDA_CHECK;
-		// Initialize dual variables
+		// Initialize dual variables with 0
 		cudaMemset(data.d_v_p[i], 0, w*h*nc*sizeof(float));
 		CUDA_CHECK;
 		cudaMemset(data.d_v_q1[i], 0, w*h*sizeof(float2));
@@ -262,7 +269,6 @@ void calculateFlow(Data& data, int numImgs, float gamma, int iterations, int w, 
 
 	// Update in an alternating fashion the dual variables p, q1, q2 and the primal variable (flow field) v
 	for (int j = 0; j < iterations; j++) {
-		
 		for (int i = 0; i < numImgs - 1; i++) {
 			// Update dual variable p
 			flow_updateP<<<grid3d, block3d>>>(data.d_v_p[i], data.d_v1[i], data.d_v2[i], data.d_A[i], data.d_b[i], gamma, w, h);
@@ -286,18 +292,18 @@ void calculateFlow(Data& data, int numImgs, float gamma, int iterations, int w, 
 		// Compute energy of latest flow field
 		cudaMemset(data.d_energy, 0, sizeof(float));
 		CUDA_CHECK;
-		flowFieldEnergy<<<grid1d, block1d, bytesSM1d>>>(data.d_energy, data.d_A, data.d_b, data.d_v1, data.d_v2, gamma, w, h, nc);
+		flowFieldEnergy<<<grid1d, block1d, bytesSM1d>>>(data.d_energy, data.d_A[0], data.d_b[0], data.d_v1[0], data.d_v2[0], gamma, w, h, nc);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		float energy;
 		cudaMemcpy(&energy, data.d_energy, sizeof(float), cudaMemcpyDeviceToHost);
 		CUDA_CHECK;
-		cout << "Flow field energy in iteration " << i << ": " << energy << endl;
+		cout << "Flow field energy in iteration " << j << ": " << energy << endl;
 #endif
 	}
 }
 
-// Computes super resolution images u1, u2 for fixed flow field (v1, v2)
+// Computes super resolution images u for fixed flow field (v1, v2)
 void calculateSuperResolution(Data& data, int numImgs, int iterations, float alpha, float beta, float gamma, int w, int h, int w_small, int h_small, int nc) {
 	// Helper values
 	int n = w*h*nc;
@@ -323,30 +329,30 @@ void calculateSuperResolution(Data& data, int numImgs, int iterations, float alp
 	float sigmaP = 1.0f;
 	float sigmaQ = 0.5f;
 
-	// Update in an alternating fashion the dual variables p1, p2, q1, q2, r and the primal variables (super resolution images) u1, u2
+	// Update in an alternating fashion the dual variables p, q, r and the primal variables (super resolution images) u
 	for (int j = 0; j < iterations; j++) {
 		for (int i = 0; i < numImgs; i++) {
-			// Blur u1
+			// Blur u
 			gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_u[i], data.d_temp_big, w, h);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
-			// Downsample blurred u1
+			// Downsample blurred u
 			downsample<<<grid3d_small, block3d>>>(data.d_temp_big, data.d_Au, w, h, w_small, h_small);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
-			// Update dual variable p1
+			// Update dual variable p
 			super_updateP<<<grid3d_small, block3d>>>(data.d_u_p[i], data.d_f[i], data.d_Au, sigmaP, alpha, w_small, h_small);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
-			// Update dual variable q1
+			// Update dual variable q
 			super_updateQ<<<grid3d, block3d>>>(data.d_u_q[i], data.d_u[i], sigmaQ, beta, w, h);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
-			// Upsample p1
+			// Upsample p
 			upsample<<<grid3d, block3d>>>(data.d_u_p[i], data.d_temp_big, w, h, w_small, h_small);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
-			// Blur upsampled p1
+			// Blur upsampled p
 			gaussBlur5<<<grid3d, block3d, smBytes>>>(data.d_temp_big, data.d_u_Atp[i], w, h);
 			cudaDeviceSynchronize();
 			CUDA_CHECK;
@@ -356,7 +362,7 @@ void calculateSuperResolution(Data& data, int numImgs, int iterations, float alp
 				cudaDeviceSynchronize();
 				CUDA_CHECK;
 			}
-			// Update super resolution images u1, u2
+			// Update super resolution images u
 			super_updateU<<<grid3d, block3d>>>(data.d_u[i], data.d_u_r[max(i-1, 0)], data.d_u_r[min(i, numImgs-2)], data.d_u_Atp[i],
 				data.d_u_q[i], data.d_v1[max(i-1, 0)], data.d_v2[max(i-1, 0)], w, h, i, numImgs);
 			cudaDeviceSynchronize();

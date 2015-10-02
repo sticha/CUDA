@@ -147,7 +147,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 
-		cudaMemset(d_energy, 0, sizeof(float));
+		/*cudaMemset(d_energy, 0, sizeof(float));
 		CUDA_CHECK;
 		flowFieldEnergy<<<grid1d, block1d, bytesSM1d>>>(d_energy, d_A, d_b, d_v1, d_v2, gamma, w, h, nc);
 		cudaDeviceSynchronize();
@@ -155,7 +155,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 		float energy;
 		cudaMemcpy(&energy, d_energy, sizeof(float), cudaMemcpyDeviceToHost);
 		CUDA_CHECK;
-		cout << "Flow field energy in iteration " << i << ": " << energy << endl;
+		cout << "Flow field energy in iteration " << i << ": " << energy << endl;*/
 	}
 
 	createColorCoding<<<grid2dborder, block2d>>>(d_v1, d_v2, d_out, wborder, hborder, colorBorder);

@@ -1,6 +1,7 @@
 #include "imageTransform.h"
 #include "helper_math.h"
-__constant__ float blurKernel[5];
+__device__ float blurKernel[5] = { 0.0219296448f, 0.2285121468f, 0.4991164165f, 0.2285121468f, 0.0219296448f };
+
 const int kernelDia = 5;
 const int kernelDia_Small = kernelDia / 2 + 1;
 
@@ -127,7 +128,7 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 		for (int j = 0; j < kernelDia_Small; j++) {
 			// only get values inside the image
 			int valIdx_X = clamp(x_small + j - kernelDia_Small / 2, 0, w_small - 1);
-			float val = in[valIdx_X + valIdx_Y * w_small + w_small * h_small * c];
+			float val = 0.25f * in[valIdx_X + valIdx_Y * w_small + w_small * h_small * c];
 			// ignore most left value if a left pixel is evaluated
 			if (!offsX || j > 0) {
 				sum += blurKernel[2 * j - offsX] * val;
@@ -228,7 +229,7 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	}
 }
 
-/*__global__ void blur(float *in, float *out, int w, int h, float kernelDia){
+__global__ void blur(float *in, float *out, int w, int h, float kernelDia){
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
@@ -237,19 +238,24 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 
 	int radius = kernelDia / 2;
 
-	int shIdxX = threadIdx.x + radius;
-	int shIdxY = threadIdx.y + radius;
-	int thIdx = threadIdx.x + threadIdx.y * blockDim.x;
-
 	extern __shared__ float sh_data[];
 	int sharedSizeX = blockDim.x + kernelDia - 1;
 	int sharedSizeY = blockDim.y + kernelDia - 1;
+
+	int shIdxX = threadIdx.x + radius;
+	int shIdxY = threadIdx.y + radius;
+	int shIdx = shIdxX + shIdxY * sharedSizeX;
+	int thIdx = threadIdx.x + threadIdx.y * blockDim.x;
+
+	
 
 	int x0 = blockDim.x * blockIdx.x;
 	int y0 = blockDim.y * blockIdx.y;
 	int x0s = x0 - radius;
 	int y0s = y0 - radius;
 
+	bool isImgPixel = x < w && y < h;
+	
 	for (int sidx = thIdx; sidx < sharedSizeX*sharedSizeY; sidx += blockDim.x*blockDim.y) {
 		int ix = clamp(x0s + sidx % sharedSizeX, 0, w - 1);
 		int iy = clamp(y0s + sidx / sharedSizeX, 0, h - 1);
@@ -258,21 +264,37 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	__syncthreads();
 
 	// horizontal smooth
-	if (x < w)	{
-		float sum = 0.0f;
+	float sum1 = 0.0f;
+	float sum2 = 0.0f;
+	if (isImgPixel)	{
 		for (int i = 0; i < kernelDia; i++){
-			sum += blurKernel[i] * sh_data[shIdxX + i - radius + shIdxY * sharedSizeX];
+			sum1 += blurKernel[i] * sh_data[shIdx + i - radius];
 		}
-		sh_data[shIdxX + shIdxY * sharedSizeX] = sum;
+		if (threadIdx.x < radius || threadIdx.x >= blockDim.x - radius) {
+			int shiftIndex = shIdx + (threadIdx.y >= radius ? radius : -radius) * sharedSizeX;
+			for (int i = 0; i < kernelDia; i++) {
+				sum2 += blurKernel[i] * sh_data[shiftIndex];
+			}
+		}
 	}
 	__syncthreads();
 
+	if (isImgPixel) {
+		// store blurred pixels into shared memory
+		sh_data[shIdx] = sum1;
+		if (threadIdx.y <= 1 || threadIdx.y >= blockDim.y - 2) {
+			sh_data[shIdx + (threadIdx.y >= radius ? radius : -radius) * sharedSizeX] = sum2;
+		}
+	}
+
+	__syncthreads();
+
 	// vertical smooth
-	if (x < w && y < h)	{
+	if (isImgPixel)	{
 		float sum = 0.0f;
 		for (int i = 0; i < kernelDia; i++){
 			sum += blurKernel[i] * sh_data[shIdxX + (shIdxY + i - radius) * sharedSizeX];
 		}
 		out[idx] = sum;
 	}
-}*/
+}

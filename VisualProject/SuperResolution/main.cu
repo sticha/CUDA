@@ -36,7 +36,7 @@ const int stdNumImgs = 2;
 const int stdStartImg = 1;
 
 // uncomment to use the camera
-// #define CAMERA
+#define CAMERA
 
 
 // The difference d_b = d_u2 - d_u1

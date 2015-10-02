@@ -159,14 +159,14 @@ __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, i
 //#define GK5_2 0.0856291639f
 
 // sigma = 0.8
-#define GK5_0 0.4991164165f
-#define GK5_1 0.2285121468f
-#define GK5_2 0.0219296448f
+//#define GK5_0 0.4991164165f
+//#define GK5_1 0.2285121468f
+//#define GK5_2 0.0219296448f
 
 // sigma = 0.6
-//#define GK5_0 0.6638183293f
-//#define GK5_1 0.1655245666f
-//#define GK5_2 0.0025662686f
+#define GK5_0 0.6638183293f
+#define GK5_1 0.1655245666f
+#define GK5_2 0.0025662686f
 
 __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	// shared memory for optimized memory access
@@ -178,16 +178,17 @@ __global__ void gaussBlur5(float* in, float* out, int w, int h) {
 	int c = threadIdx.z;
 	int wb = blockDim.x + 4;
 
-	int sindex = threadIdx.x + 2 + (threadIdx.y + 2) * wb;
+	int sindex = threadIdx.x + 2 + (threadIdx.y + 2) * wb + wb * (blockDim.y + 4) * c;
 	int index = x + y * w + c * w * h;
 	bool realPixel = (x < w && y < h);
 
 	// fill shared memory (area covered by this block + 2 pixel of additional border)
 	float accum;
-	for (int si = threadIdx.x + threadIdx.y * blockDim.x; si < wb*(blockDim.y + 4); si += blockDim.x * blockDim.y) {
-		int inX = min(w-1, max(0, blockIdx.x * blockDim.x - 2 + (si % wb)));
-		int inY = min(h-1, max(0, blockIdx.y * blockDim.y - 2 + (si / wb)));
-		accum = in[inX + inY * w + c * w * h];
+	for (int si = threadIdx.x + threadIdx.y * blockDim.x + c * blockDim.x * blockDim.y; si < wb*(blockDim.y + 4)*blockDim.z; si += blockDim.x * blockDim.y * blockDim.z) {
+		int inX = min(w - 1, max(0, blockIdx.x * blockDim.x - 2 + (si % wb)));
+		int inY = min(h - 1, max(0, blockIdx.y * blockDim.y - 2 + ((si / wb) % (blockDim.y + 4))));
+		int inZ = si / (wb*(blockDim.y + 4));
+		accum = in[inX + inY * w + inZ * w * h];
 		sdata[si] = accum;
 	}
 

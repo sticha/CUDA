@@ -65,6 +65,19 @@ __device__ float applyBflow(float* d_u1, float* d_u2, float v1, float v2, int x,
 	// index for image pixel access with color channel
 	int idxc = x + y * w + c * w * h;
 
+	// forward difference with Neumann boundaries -> set to 0.0
+	/*float difU2x, difU2y;
+	if (x < w - 1) {
+		difU2x = d_u2[idxc + 1] - d_u2[idxc];
+	} else {
+		difU2x = 0.0f;
+	}
+	if (y < h - 1) {
+		difU2y = d_u2[idxc + w] - d_u2[idxc];
+	} else {
+		difU2y = 0.0f;
+	}*/
+
 	// central difference with Neumann boundaries -> set to 0.0
 	float difU2x, difU2y;
 	if (x < w - 1 && x > 0) {
@@ -126,6 +139,23 @@ __device__ float applyBflowTranspose(float* d_r1, float* d_r2, float* d_v1, floa
 		// first image
 		return d_r2[idxc];
 	}
+
+	// transpose operator of the forward differences combined with v
+	/*float difRx, difRy;
+	if (x == 0) {
+		difRx = -d_r1[idxc] * d_v1[idx];
+	} else if (x == w - 1) {
+		difRx = d_r1[idxc - 1] * d_v1[idx - 1];
+	} else {
+		difRx = d_r1[idxc - 1] * d_v1[idx - 1] - d_r1[idxc] * d_v1[idx];
+	}
+	if (y == 0) {
+		difRy = -d_r1[idxc] * d_v2[idx];
+	} else if (y == h - 1) {
+		difRy = d_r1[idxc - w] * d_v2[idx - w];
+	} else {
+		difRy = d_r1[idxc - w] * d_v2[idx - w] - d_r1[idxc] * d_v2[idx];
+	}*/
 
 	// transpose operator of the central differences combined with v (-> with two pixel Dirichlet boundaries)
 	float difRx, difRy;

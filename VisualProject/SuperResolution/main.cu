@@ -164,7 +164,7 @@ void InitializeGPUData(float** f, Data& data, int numImgs, int w, int h, int w_s
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);
 
-	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
+	int smBytes = (block3d.x + 4) * (block3d.y + 4) * nc * sizeof(float);
 	for (int i = 0; i < numImgs; i++) {
 		cudaMemset(data.d_u_p[i], 0, n_small*sizeof(float));
 		CUDA_CHECK;
@@ -311,7 +311,7 @@ void calculateSuperResolution(Data& data, int numImgs, int iterations, float alp
 	dim3 block2d = dim3(16, 16, 1);
 	dim3 grid2d = dim3((w + block2d.x - 1) / block2d.x, (h + block2d.y - 1) / block2d.y, 1);
 
-	int smBytes = (block3d.x + 4) * (block3d.y + 4) * sizeof(float);
+	int smBytes = (block3d.x + 4) * (block3d.y + 4) * nc * sizeof(float);
 
 #ifdef SUPER_ENERGY
 	dim3 block1d = dim3(128, 1, 1);
@@ -368,13 +368,14 @@ void calculateSuperResolution(Data& data, int numImgs, int iterations, float alp
 		// Compute energy of latest super resolution
 		cudaMemset(data.d_energy, 0, sizeof(float));
 		CUDA_CHECK;
-		superResolutionEnergy<<<grid1d, block1d, bytesSM1d>>>(data.d_energy, data.d_u1, data.d_u2, data.d_f1, data.d_f2, data.d_v1, data.d_v2, alpha, beta, gamma, w, h, nc);
+		superResolutionEnergy<<<grid1d, block1d, bytesSM1d>>>(data.d_energy, data.d_u[numImgs-2], data.d_u[numImgs-1], data.d_f[numImgs-2], data.d_f[numImgs-1],
+			data.d_v1[numImgs-2], data.d_v2[numImgs-2], alpha, beta, gamma, w, h, nc);
 		cudaDeviceSynchronize();
 		CUDA_CHECK;
 		float energy;
 		cudaMemcpy(&energy, data.d_energy, sizeof(float), cudaMemcpyDeviceToHost);
 		CUDA_CHECK;
-		cout << "Super resolution energy in iteration " << i << ": " << energy << endl;
+		cout << "Super resolution energy in iteration " << j << ": " << energy << endl;
 #endif
 	}
 }
@@ -438,17 +439,17 @@ int main(int argc, char **argv) {
 	cout << "gray: " << gray << endl;
 
 	// Value for tuning similarity of the downsampled high resolution results to the low resolution input images
-	float alpha = 1.f;
+	float alpha = 12.0f;
 	getParam("alpha", alpha, argc, argv);
 	cout << "alpha: " << alpha << endl;
 
 	// Value for tuning the total variation of the high resolution images
-	float beta = 0.01f;
+	float beta = 0.18f;
 	getParam("beta", beta, argc, argv);
 	cout << "beta: " << beta << endl;
 
 	// Value for tuning the importance of the flow constraint
-	float gamma = 8.f;
+	float gamma = 5.0f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
 
@@ -458,7 +459,7 @@ int main(int argc, char **argv) {
 	cout << "color coding border: " << colorBorder << endl;
 
 	// Number of iterations for each update of the flow field and the super resolution images
-	int iterations = 200;
+	int iterations = 1000;
 	getParam("iterations", iterations, argc, argv);
 	cout << "iterations: " << iterations << endl;
 
@@ -622,7 +623,7 @@ int main(int argc, char **argv) {
 		// Initialize arrays with start values
 		InitializeGPUData(imgIn, data, numImgs, w, h, w_small, h_small, nc);
 		// Alternating optimization of flow field and super resolution images
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < 1; i++) {
 			// Compute flow estimation
 			calculateFlow(data, numImgs, gamma, iterations, w, h, nc);
 			// Compute super resolution

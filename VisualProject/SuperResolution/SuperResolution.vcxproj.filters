@@ -8,11 +8,11 @@
     <CudaCompile Include="imageTransform.cu" />
     <CudaCompile Include="main.cu" />
     <CudaCompile Include="projections.cu" />
-    <CudaCompile Include="update.cu" />
     <CudaCompile Include="updateSuperResolution.cu" />
     <CudaCompile Include="ScaleBlurTests.cu">
       <Filter>test</Filter>
     </CudaCompile>
+    <CudaCompile Include="updateFlowField.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="divergence.h" />
@@ -22,8 +22,8 @@
     <ClInclude Include="helper_math.h" />
     <ClInclude Include="imageTransform.h" />
     <ClInclude Include="projections.h" />
-    <ClInclude Include="update.h" />
     <ClInclude Include="updateSuperResolution.h" />
+    <ClInclude Include="updateFlowField.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="test">

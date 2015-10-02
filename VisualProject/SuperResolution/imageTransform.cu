@@ -63,11 +63,7 @@ __global__ void upsample(float* in_small, float* out_big, int w, int h, int w_sm
 	int ind_big = x + y * w + c * w * h;
 	int ind_small = x_small + y_small * w_small + c * w_small * h_small;
 
-	//if ((x & 1) == 1 || (y & 1) == 1) {
-	//	out_big[ind_big] = 0.0f;
-	//} else {
-		out_big[ind_big] = 0.25f * in_small[ind_small];
-	//}
+	out_big[ind_big] = 0.25f * in_small[ind_small];
 }
 
 // Kernel to sample the input images up for initialization of the u_i

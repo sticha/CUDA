@@ -22,7 +22,7 @@
 #include "divergence.h"
 #include "projections.h"
 #include "imageTransform.h"
-#include "update.h"
+#include "updateFlowField.h"
 #include "updateSuperResolution.h"
 #include "flow_color.h"
 #include "energy.h"
@@ -305,10 +305,6 @@ void calculateFlow(Data& data, int numImgs, float gamma, int iterations, int w, 
 
 // Computes super resolution images u for fixed flow field (v1, v2)
 void calculateSuperResolution(Data& data, int numImgs, int iterations, float alpha, float beta, float gamma, int w, int h, int w_small, int h_small, int nc) {
-	// Helper values
-	int n = w*h*nc;
-	int n_small = w_small*h_small*nc;
-
 	// Calculate grid size
 	dim3 block3d = dim3(16, 16, nc);
 	dim3 grid3d = dim3((w + block3d.x - 1) / block3d.x, (h + block3d.y - 1) / block3d.y, 1);

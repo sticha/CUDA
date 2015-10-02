@@ -1,11 +1,11 @@
-#include "update.h"
+#include "updateFlowField.h"
 #include "projections.h"
 #include "divergence.h"
 #include <math.h>
 
 #define EPSILON 0.0001
 
-// Update dual variable p
+// Update dual variables p
 __global__ void flow_updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, float* d_b, float gamma, int w, int h) {
 	// get current thread index (x, y, c)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
@@ -30,10 +30,8 @@ __global__ void flow_updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, 
 	float2 A = d_A[idxc];
 	// s
 	float sigma = 1.0f / (abs(A.x) + abs(A.y) + EPSILON);
-	// b
-	float acc = d_b[idxc];
 	// Av + b
-	acc += A.x * d_v1[idx] + A.y * d_v2[idx];
+	float acc = A.x * d_v1[idx] + A.y * d_v2[idx] + d_b[idxc];
 	// p + s * (Av + b)
 	float oldp = d_p[idxc];
 	acc = oldp + sigma * acc;
@@ -43,7 +41,8 @@ __global__ void flow_updateP(float* d_p, float* d_v1, float* d_v2, float2* d_A, 
 	d_p[idxc] = 2 * acc - oldp;
 }
 
-// Update dual variable q1 or q2
+
+// Update dual variables q1 or q2
 __global__ void flow_updateQ(float2* d_q, float* d_v, float sigma, int w, int h) {
 	// get current thread index (x, y)
 	int x = threadIdx.x + blockDim.x * blockIdx.x;
@@ -71,6 +70,7 @@ __global__ void flow_updateQ(float2* d_q, float* d_v, float sigma, int w, int h)
 	// sor: q_k+1 = 2 * q_k+1' - q_k
 	d_q[idx] = make_float2(2 * acc.x - qold.x, 2 * acc.y - qold.y);
 }
+
 
 // Update flow field
 __global__ void flow_updateV(float* d_v1, float* d_v2, float* d_p, float2* d_q1, float2* d_q2, float2* d_A, int w, int h, int nc) {

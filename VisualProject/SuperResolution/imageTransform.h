@@ -26,12 +26,13 @@ __global__ void initialUpsample(float* in, float* out, int w, int h, int w_small
 
 //__global__ void blur(float *in, float *out, int w, int h, float kernelDia);
 
+// device functions for up- and downsampling -> currently not used for calculation
 __device__ float d_upsample(float* in, int x_big, int y_big, int c, int w_big, int h_big);
 __device__ float d_downsample(float* in, int x_small, int y_small, int c, int w_small, int h_small);
 
 float getKernel(float * kernel, float sigma, int diameter);
 void getNormalizedKernel(float * kernel, float sigma, int diameter);
 
-// gaussian blur (5x5 kernel for sigma = 1.2) as kernel function
+// gaussian blur (5x5 kernel) as kernel function
 __global__ void gaussBlur5(float* in, float* out, int w, int h);
 #endif

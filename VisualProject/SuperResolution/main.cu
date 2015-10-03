@@ -257,8 +257,8 @@ int main(int argc, char **argv)
 	// Init camera
 	cv::VideoCapture camera(0);
 	if (!camera.isOpened()) { cerr << "ERROR: Could not open camera" << endl; return 1; }
-	int camW = 640;
-	int camH = 480;
+	int camW = 320;
+	int camH = 240;
 	camera.set(CV_CAP_PROP_FRAME_WIDTH, camW);
 	camera.set(CV_CAP_PROP_FRAME_HEIGHT, camH);
 	// read in first frame to get the dimensions

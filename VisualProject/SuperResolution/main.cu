@@ -118,7 +118,7 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 
 	dim3 block1d = dim3(32, 1, 1);
 	dim3 grid1d = dim3((w*h + block1d.x - 1) / block1d.x, 1, 1);
-	int bytesSM1d = block1d.x * sizeof(float);
+	//int bytesSM1d = block1d.x * sizeof(float);
 
 	dim3 grid2dborder = dim3((wborder + block2d.x - 1) / block2d.x, (hborder + block2d.y - 1) / block2d.y, 1);
 

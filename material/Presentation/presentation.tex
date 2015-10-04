@@ -31,6 +31,10 @@
 flowstyle/.style={rectangle, rounded corners, fill=TUM_lightgreenish, draw=green!40!black!80, very thick, align=left},
 superstyle/.style={rectangle, rounded corners, fill=TUM_blue_5, draw=TUM_blue, very thick, align=left}
 }
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\captionsetup{compatibility=false}
 
 
 \begin{document}
@@ -188,12 +192,59 @@ $E(u, v) = \underbrace{\alpha ||Au - f\,||_1 + \beta TV(u)}_{\text{Super-Resolut
 \frame{
 \frametitle{Results}
 \begin{itemize}
-  \item Results
+  \item Optical Flow Estimation
   \begin{itemize}
-    \item .
-    \item .
+    \item Live Demo ...
   \end{itemize}
 \end{itemize}
+\begin{figure}
+  \centering
+  \includegraphics[width=.5\linewidth]{images/flow.png}
+\end{figure}
+}
+\frame{
+\frametitle{Results}
+\begin{itemize}
+  \item Super-Resolution with Optical Flow Estimation
+  \begin{itemize}
+    \item Input:
+  \end{itemize}
+\end{itemize}
+\begin{figure}
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{images/carwide_01.png}
+  \caption{Input 1}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{images/carwide_02.png}
+  \caption{Input 2}
+\end{subfigure}
+\end{figure}
+}
+\frame{
+\frametitle{Results}
+\begin{itemize}
+  \item Super-Resolution with Optical Flow Estimation
+  \begin{itemize}
+    \item Result:
+  \end{itemize}
+\end{itemize}
+\begin{figure}
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{images/sr1.png}
+  \caption{Super-Resolution 1}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{images/carwide_01.png}
+  \caption{Input 1}
+\end{subfigure}
+\end{figure}
 }
 
  
@@ -202,15 +253,16 @@ $E(u, v) = \underbrace{\alpha ||Au - f\,||_1 + \beta TV(u)}_{\text{Super-Resolut
 \frametitle{Conclusion and Future Work}
 \begin{itemize}
   \item More than two input images
-  \item Arbitrary Scaling (aktuell nur * 2)
-  \item Flow Estimation nur max. 1 Pixel Bewegungen
+  \item Arbitrary scaling
+  \item Optical flow estimation for movements > 1 Pixel
 \end{itemize}
 }
 
-\frame[allowframebreaks]{
-\frametitle{Bibliography}
-	\tiny
-	\bibliography{bibliography} 
+\frame{
+\frametitle{End}
+\begin{center}
+\Huge Thank you for your attention!
+\end{center}
 }
 
 \end{document}

@@ -24,6 +24,14 @@
 \author[\authorName: \titleEn]{\authorName}
 \date{October 6th, 2015}
 
+% our own used packages
+\usepackage{tikz}
+\usetikzlibrary{arrows, positioning}
+\tikzset{
+flowstyle/.style={rectangle, rounded corners, fill=TUM_lightgreenish, draw=green!40!black!80, very thick, align=left},
+superstyle/.style={rectangle, rounded corners, fill=TUM_blue_5, draw=TUM_blue, very thick, align=left}
+}
+
 
 \begin{document}
 
@@ -62,14 +70,117 @@
 \section{Energy Minimization Approach}
 \frame{
 \frametitle{Energy Minimization Approach}
+
+\begin{columns}[T]
+\column{.45\textwidth}
+\begin{tikzpicture}
+\tikzset{
+smallImage/.style={rectangle, fill=TUM_gold, draw=TUM_orange, very thick, text width=1.5em, minimum height=2.5em, text centered},
+bigImage/.style={rectangle, fill=TUM_blue_5, draw=TUM_blue, very thick, text width=2.5em, minimum height=4em, text centered},
+flowField/.style={circle, fill=TUM_lightgreenish, draw=green!40!black!80, very thick, text width=1.0em, text centered},
+imArrow/.style={->, >=latex', shorten >= 0.5pt, thick},
+flowArrow/.style={->, >=latex', shorten >= 1pt, bend angle = 30, bend right, thick}}
+
+\uncover<2->{
+\node[text centered] (input) at (0.4, 0.8) {Input Images:};
+\node[smallImage] (f1) {$f_1$};
+\node[smallImage, right=1.3cm of f1] (f2) {$f_2$};
+\node[smallImage, right=1.3cm of f2] (f3) {$f_3$};
+\draw[imArrow] (f1.east) -- (f2.west);
+\draw[imArrow] (f2.east) -- (f3.west);
+}
+\uncover<3->{
+\node[bigImage, below=of f1] (u1) {$u_1$};
+\node[bigImage, below=of f2] (u2) {$u_2$};
+\node[bigImage, below=of f3] (u3) {$u_3$};
+\draw[imArrow] (f1.south) -| (u1.north);
+\draw[imArrow] (f2.south) -| (u2.north);
+\draw[imArrow] (f3.south) -| (u3.north);
+}
+\uncover<4->{
+\node[flowField] (v1) at (1.08, -4) {$v_1$};
+\node[flowField] (v2) at (3.26, -4) {$v_2$};
+\draw[flowArrow] (u1.275) to (v1.west);
+\draw[flowArrow] (v1.east) to (u2.265);
+\draw[flowArrow] (u2.275) to (v2.west);
+\draw[flowArrow] (v2.east) to (u3.265);
+}
+% energy info box
+\uncover<5->{
+\node[rectangle, rounded corners, draw=black, thick, dashed, text width=15em, minimum height=11em] (info) at (2.17, -3.2) {};
+\node[text centered] (energy) at (2.17, -4.9) {Defined by energy $E(u, v)$};
+}
+\end{tikzpicture}
+
+\column{.05\textwidth}
+\column{.45\textwidth}
+\vspace{15mm}
+\uncover<6->{
+Alternating Optimization:
+\begin{align*}
+v^{k+1} &\leftarrow \underset{v}{\text{argmin}} ~ E(u^k, v)\\
+u^{k+1} &\leftarrow \underset{u}{\text{argmin}} ~ E(u, v^{k+1})
+\end{align*}
+}
+\end{columns}
+}
+
+\frame{
+\frametitle{Flow Field Energy}
 \begin{itemize}
-  \item Schema des Ansatzes
-  \begin{itemize}
-    \item .
-    \item .
-  \end{itemize}
-  \item .
+  \setlength\itemsep{1em}
+  \uncover<2->{
+  \item Optical Flow Constraint: $~ u_i(x) \overset{!}{=} u_{i+1}(x + v_i(x))$}\\
+  \vspace{2mm}
+  \uncover<3->{$\rightarrow \text{minimize } ||u_t - \nabla u^T \cdot v||_1$}\\
+  \item<4-> Total Variation: $TV(v)$
 \end{itemize}
+\vspace{8mm}
+\uncover<5>{
+\begin{center}\begin{tikzpicture}
+	\node [flowstyle]{$E_{flow}(v) = \gamma ||u_t - \nabla u^T \cdot v||_1 + TV(v)$};
+\end{tikzpicture}\end{center}}
+}
+
+\frame{
+\frametitle{Super-Resolution Energy}
+\begin{itemize}
+\setlength\itemsep{1em}
+  \item<2-> Super-Resolution\\
+  \vspace{2mm}
+  $\rightarrow \text{minimize: } ||Au - f\,||_1$
+  \item<3-> Optical Flow Contraint\\
+  \vspace{2mm}
+  $\rightarrow \text{minimize: } ||u_t - \nabla u^T \cdot v||_1$
+  \item<4-> Total Variation: $TV(u)$
+\end{itemize}
+\vspace{3mm}
+\uncover<5->{
+\begin{center}\begin{tikzpicture}
+\node [superstyle]{
+$E_{super}(u) = \alpha ||Au - f\,||_1 + \beta TV(u) + \gamma||u_t - \nabla u^T \cdot v||_1$};
+\end{tikzpicture}\end{center}}
+}
+
+\frame{
+\frametitle{Total Energy}
+\begin{center}
+\begin{tikzpicture}
+	\node [flowstyle]{$E_{flow}(v) = \gamma ||u_t - \nabla u^T \cdot v||_1 + TV(v)$};
+\end{tikzpicture}\\
+\vspace{3mm}
++\\
+\vspace{4mm}
+\begin{tikzpicture}
+\node [superstyle]{
+$E_{super}(u) = \alpha ||Au - f\,||_1 + \beta TV(u) + \gamma||u_t - \nabla u^T \cdot v||_1$};
+\end{tikzpicture}
+\\
+\vspace{5mm}
+$\downarrow$\\
+\vspace{5mm}
+$E(u, v) = \underbrace{\alpha ||Au - f\,||_1 + \beta TV(u)}_{\text{Super-Resolution}} + \underbrace{TV(v)}_{\text{Flow}} + \underbrace{\gamma||u_t - \nabla u^T \cdot v||_1}_{\text{Coupling}}$
+\end{center}
 }
 
 

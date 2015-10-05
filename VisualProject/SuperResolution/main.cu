@@ -441,17 +441,17 @@ int main(int argc, char **argv) {
 	cout << "gray: " << gray << endl;
 
 	// Value for tuning similarity of the downsampled high resolution results to the low resolution input images
-	float alpha = 12.0f;
+	float alpha = 1.0f;
 	getParam("alpha", alpha, argc, argv);
 	cout << "alpha: " << alpha << endl;
 
 	// Value for tuning the total variation of the high resolution images
-	float beta = 0.18f;
+	float beta = 0.04f;
 	getParam("beta", beta, argc, argv);
 	cout << "beta: " << beta << endl;
 
 	// Value for tuning the importance of the flow constraint
-	float gamma = 5.0f;
+	float gamma = 10.0f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
 

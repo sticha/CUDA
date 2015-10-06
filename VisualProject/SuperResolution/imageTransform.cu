@@ -30,19 +30,36 @@ __global__ void downsample(float* in_big, float* out_small, int w, int h, int w_
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
 
-	int x_big = x * 2;
-	int y_big = y * 2;
-
 	// return if pixel outside image
 	if (x >= w_small || y >= h_small) {
 		return;
 	}
 
-	// indices to access pixel
-	int ind_big = x_big + y_big * w + c * w * h;
-	int ind_small = x + y * w_small + c * w_small * h_small;
+	// borders of area in high resolution image covered by low resolution pixel
+	float x_min = static_cast<float>(x)* w / w_small;
+	float x_max = static_cast<float>(x + 1) * w / w_small;
+	float y_min = static_cast<float>(y)* h / h_small;
+	float y_max = static_cast<float>(y + 1) * h / h_small;
 
-	out_small[ind_small] = 0.25f * in_big[ind_big] + 0.25f * in_big[ind_big+1] + 0.25f * in_big[ind_big+w] + 0.25f * in_big[ind_big+w+1];
+	// border pixel overlap in y direction
+	float y_overlap_top = static_cast<int>(y_min)+1 - y_min;
+	float y_overlap_bottom = y_max - static_cast<int>(y_max);
+
+	float acc = 0.0f;
+	for (int xl = static_cast<int>(x_min); xl < static_cast<int>(x_max)+1; xl++) {
+		float xarea = fminf(xl + 1, x_max) - fmaxf(xl, x_min);
+		// add pixel overlap in y direction to accumulator
+		acc += xarea * y_overlap_top * in_big[xl + static_cast<int>(y_min)* w + c * w * h];
+		acc += xarea * y_overlap_bottom * in_big[xl + static_cast<int>(y_max)* w + c * w * h];
+		// handle complete inner pixels in y direction
+		for (int yl = static_cast<int>(y_min)+1; yl < static_cast<int>(y_max); yl++) {
+			acc += xarea * in_big[xl + yl * w + c * w * h];
+		}
+	}
+
+	// write normalized pixel color to small output image
+	int ind_small = x + y * w_small + c * w_small * h_small;
+	out_small[ind_small] = acc / ((x_max - x_min) * (y_max - y_min));
 }
 
 __global__ void upsample(float* in_small, float* out_big, int w, int h, int w_small, int h_small) {
@@ -51,19 +68,45 @@ __global__ void upsample(float* in_small, float* out_big, int w, int h, int w_sm
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int c = threadIdx.z;
 
-	int x_small = x / 2;
-	int y_small = y / 2;
-
 	// return if pixel outside image
 	if (x >= w || y >= h) {
 		return;
 	}
 
+	// pixel coordinates in small images
+	int x_small = x * w_small / w;
+	int y_small = y * h_small / h;
+	// distance of x to vertical border in small image corresponding to x+1
+	float x_border_diff = ((x + 1) * w_small / w) * 1.0f * w / w_small - x;
+	// distance of y to horizontal border in small image corresponding to y+1
+	float y_border_diff = ((y + 1) * h_small / h) * 1.0f * h / h_small - y;
+
 	// indices to access pixel
 	int ind_big = x + y * w + c * w * h;
 	int ind_small = x_small + y_small * w_small + c * w_small * h_small;
 
-	out_big[ind_big] = 0.25f * in_small[ind_small];
+	// accumulate color contribution
+	float acc;
+
+	if (x_border_diff > 0) {
+		if (y_border_diff > 0) {
+			// high resolution pixel crossed by horizontal and vertical pixel border in small image
+			acc = x_border_diff*y_border_diff*in_small[ind_small] + (1 - x_border_diff)*y_border_diff*in_small[ind_small + 1]
+				+ x_border_diff*(1 - y_border_diff)*in_small[ind_small + w_small] + (1 - x_border_diff)*(1 - y_border_diff)*in_small[ind_small + w_small + 1];
+		} else {
+			// high resolution pixel crossed by vertical pixel border in small image
+			acc = x_border_diff*in_small[ind_small] + (1 - x_border_diff)*in_small[ind_small + 1];
+		}
+	} else {
+		if (y_border_diff > 0) {
+			// high resolution pixel crossed by horizontal pixel border in small image
+			acc = y_border_diff*in_small[ind_small] + (1 - y_border_diff)*in_small[ind_small + w_small];
+		} else {
+			// high resolution pixel totally inside pixel of small image
+			acc = in_small[ind_small];
+		}
+	}
+	out_big[ind_big] = (acc * w_small * h_small) / (w * h);
 }
 
 // Kernel to sample the input images up for initialization of the u_i

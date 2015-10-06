@@ -39,6 +39,7 @@ const string stdImgType = "png";
 const int stdNumDigits = 2;
 const int stdNumImgs = 2;
 const int stdStartImg = 1;
+const float stdImgScale = 2.0f;
 
 // uncomment to use the camera
 // #define CAMERA
@@ -496,6 +497,11 @@ int main(int argc, char **argv) {
 	getParam("start", startImg, argc, argv);
 	cout << "Index of the start Image: " << startImg << endl;
 
+	// Index of the first input image to load
+	float imgScale = stdImgScale;
+	getParam("scale", imgScale, argc, argv);
+	cout << "Scale factor for super resolution: " << imgScale << endl;
+
 	// Init camera / Load input image
 
 #ifdef CAMERA
@@ -544,8 +550,8 @@ int main(int argc, char **argv) {
 	// Get the dimensions of the images
 	int w_small = mIn[0].cols;
 	int h_small = mIn[0].rows;
-	int w = 2 * w_small;
-	int h = 2 * h_small;
+	int w = static_cast<int>(imgScale * w_small);
+	int h = static_cast<int>(imgScale * h_small);
 	int nc = mIn[0].channels();
 	cout << "input images: " << w_small << " x " << h_small << endl;
 

@@ -117,7 +117,7 @@ __global__ void super_updateR(float* d_r, float* d_u1, float* d_u2, float* d_v1,
 	float v2 = d_v2[idx];
 
 	// compute step size sigma
-	float sigma = 1.0f / (2 + 2 * fabsf(v1) + 2 * fabsf(v2));
+	float sigma = 1.0f / (2 + fabsf(v1) + fabsf(v2));
 
 	// apply operator B_flow
 	float rNew = rOld + sigma * applyBflow(d_u1, d_u2, v1, v2, x, y, c, w, h);
@@ -209,11 +209,11 @@ __global__ void super_updateU(float* d_u, float* d_r1, float* d_r2, float* d_Atp
 	// compute step size tau
 	float tau;
 	if (imIndx == 0) {
-		tau = 1.0f / 6.0f;
+		tau = 1.0f / (1.0f + 4.0f + 1.0f);
 	} else if (imIndx == nImgs - 1) {
-		tau = 1.0f / (6.0f + 2 * fabsf(d_v1[idx]) + 2 * fabsf(d_v2[idx]));
+		tau = 1.0f / (1.0f + 4.0f + 1.0f + fabsf(d_v1[idx]) + fabsf(d_v2[idx]));
 	} else {
-		tau = 1.0f / (7.0f + 2 * fabsf(d_v1[idx]) + 2 * fabsf(d_v2[idx]));
+		tau = 1.0f / (1.0f + 4.0f + 2.0f + fabsf(d_v1[idx]) + fabsf(d_v2[idx]));
 	}
 
 	// update step

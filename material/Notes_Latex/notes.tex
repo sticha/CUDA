@@ -130,7 +130,7 @@ The step sizes are chosen according to the scheme described in \cite{Pock-Chambo
 \end{equation}
 where $A(x,j)$ denotes the element in row $x$ and column $j$.
 
-Allocate memory for the variables $p \in \R^{w*h*n_c},q_1 \in \R^{w*h*2*n_c},q_2 \in \R^{w*h*2*n_c},\bar p, \bar q_1, \bar q_2, v \in \R^{w*h*2*n_c}$ as {\tt float} arrays and implement CUDA kernels for the update equations of the primal-dual algorithm. One kernel should perform the update in $p, q_1, q_2$ and do the overrelaxation, the other kernel should do the update in $v$. 
+Allocate memory for the variables $\bar p, p \in \R^{w*h*n_c}, \bar q_1, q_1 \in \R^{w*h*2*n_c}, \bar q_2, q_2 \in \R^{w*h*2*n_c}, v \in \R^{w*h*2*n_c}$ as {\tt float} arrays and implement CUDA kernels for the update equations of the primal-dual algorithm. One kernel should perform the update in $p, q_1, q_2$ and do the overrelaxation, the other kernel should do the update in $v$. 
 
 
 \subsection{Solving the Problem in $u$.}
@@ -176,8 +176,9 @@ In the same way we can apply $B_{flow}^T$ having Dirichlet boundary conditions f
 \begin{equation}
 s_i(x, y) =
 \begin{cases}
-\bar r^{k+1} & i=1 \\
--\bar r^{k+1} - \partial^{-c}_{x, v^1}\bar r^{k+1} (x, y) - \partial^{-c}_{y, v^2} \bar r^{k+1} (x, y) & i=2
+\bar r_i^{k+1} & i=1 \\
+-\bar r_{i-1}^{k+1} - \partial^{-c}_{x, v^1}\bar r_{i-1}^{k+1} (x, y) - \partial^{-c}_{y, v^2} \bar r_{i-1}^{k+1} (x, y) & i=n \\
+\bar r_i^{k+1} - \bar r_{i-1}^{k+1} - \partial^{-c}_{x, v^1}\bar r_{i-1}^{k+1} (x, y) - \partial^{-c}_{y, v^2} \bar r_{i-1}^{k+1} (x, y) & else
 \end{cases}
 \end{equation}
 \begin{equation}
@@ -197,42 +198,47 @@ s_i(x, y) =
 \end{cases}
 \end{equation}\\\\
 The used sets for the dual variables are defined as:
-\begin{equation}
-\begin{aligned}
+\begin{align*}
 E &= \{x \in \R^{2n_c} ~|~ \norm{x}_2 \leq \beta \}, \\
 F &= \{x \in \R ~|~ |x| \leq \alpha \}, \\
 G &= \{x \in \R ~|~ |x| \leq \gamma \} \\
-\end{aligned}
-\end{equation}
+\end{align*}
 Finally the step sizes for the update steps are chosen like this:
-\begin{equation}
-\begin{aligned}
+\begin{align*}
 \sigma_q &= \frac{1}{2}, \\
 \sigma_p &= 1, \\
-\sigma_r (x_{(ijc)}) &= \frac{1}{2+2|v^1(x_{(ij)})|+2|v^2(x)|} \\
+\sigma_r (x_{(ijc)}) &= \frac{1}{2+|v^1(x_{(ij)})|+|v^2(x)|} \\
 \tau_i&=\frac{1}{1+4+t_i(x)}, \\
-t_i(x)&=\begin{cases} 1 & i=1 \\ 1+|v^1(x)|*2+|v^2(x)|*2 & i \geq 2 \end{cases}
-\end{aligned}
-\end{equation}
-\\\\
-For completeness and for debugging reasons it follows a short more detailed analysis of the used operators:
-\begin{equation}
-\begin{aligned}
-B_{flow}&=\begin{pmatrix}I, &-I-v^1\partial_x-v^2\partial_y\end{pmatrix}, \\
-B_{flow}^T&=\begin{pmatrix}I \\ -I+\underset{dirichlet^x} {\partial^-_x} v^1+\underset{dirichlet^y}{\partial^-_y} v^2\end{pmatrix}, \\
-A&=DB_l, \\
-A^T&=B_lD^T \\\\
-A&\colon\R^{W*H*c}\mapsto\R^{w*h*n_c}, \\
-B_{flow}&\colon\R^{2*W*H*c}\mapsto\R^{W*H*n_c}, \\
-B_l&\colon\R^{W*H*c}\mapsto\R^{W*H*n_c}, \\
+t_i(x)&=
+\begin{cases} 1 & i=1 \\
+1+|v^1(x)|+|v^2(x)| & i = n \\
+2+|v^1(x)|+|v^2(x)| & else
+\end{cases}
+\end{align*}\\
+The downsampling operator $A$ splits up into the components $D$ which is responsible for the scaling and $B_l$ which is a simple gaussian blur kernel:
+\begin{align*}
+A&=DB_l \\
+A^T&=B_lD^T
+\end{align*}
+As the gaussian blurring operator $B_l$ is symmetric, we do not need to care about its transpose. For the downscaling a resulting small image pixel gets a color value as a combinatin of all large image pixels that intersect with it weighted by the fraction of covered pixel area. For example scaling a $4 \times 2$ image $u$ by a factor of $0.5$ yields:
+$$D \cdot u =
+\begin{pmatrix}
+0.25 & 0.25 & 0 & 0 & 0.25 & 0.25 & 0 & 0 \\
+0 & 0 & 0.25 & 0.25 & 0 & 0 & 0.25 & 0.25
+\end{pmatrix}
+\cdot
+\begin{pmatrix}
+u_{11} \\ u_{12} \\ u_{13} \\ u_{14} \\ u_{21} \\ u_{22} \\ u_{23} \\ u_{24}
+\end{pmatrix}
+$$
+The transpose of $D$ can be applied analogously.\\\\
+For completeness and debugging reasons here are the spaces the operators are defined on:
+\begin{align*}
+A&\colon\R^{W*H*c}\mapsto\R^{w*h*n_c} \\
+B_l&\colon\R^{W*H*c}\mapsto\R^{W*H*n_c} \\
 D&\colon\R^{W*H*c}\mapsto\R^{w*h*n_c} \\
-\end{aligned}
-\end{equation}
-% For fixed $v^{k+1}$, the energy minimization in $u$ reads:
-% \begin{equation}
-%   u^{k+1} = \underset{u} \argmin ~ \sum_{i=1}^n \norm{Au_i - f_i}_{2,1} + TV(u_i) + \sum_{i=1}^{n-1} || u_i - B u_{i+1} ||_{2,1},
-% \end{equation}
-% where $B : (\Omega_h \rightarrow \R^k) \rightarrow (\Omega_h \rightarrow \R^k)$ is a warping operator, which can be constructed from $v^{k+1}$.
+B_{flow}&\colon\R^{2*W*H*c}\mapsto\R^{W*H*n_c}
+\end{align*}
 
 \bibliographystyle{plain}
 \bibliography{references}

@@ -416,7 +416,9 @@ int main(int argc, char **argv)
 		//convert_layered_to_mat(mV2, v2);
 		//showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + 3 * w + 120, 100);
 
-		string name = imgPath + "flow_" + imgName + to_string(startImg) + ".png";
+		stringstream ss;
+		ss << "flow_" << setw(numDigits) << setfill('0') << startImg;
+		string name = ss.str() + imgType; //"flow_" + imgName + to_string(startImg) + ".png";
 		cv::imwrite(name, mOut*255.f);
 
 #ifdef CAMERA

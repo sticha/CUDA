@@ -28,12 +28,20 @@
 using namespace std;
 
 //Input parameters
-const string stdImgPath = "../../material/Images/";
-const string stdImgName = "carwide_";
+//const string stdImgPath = "../../material/Images/";
+//const string stdImgName = "carwide_";
+const string stdImgPath = "../../material/Video/";
+const string stdImgName = "img-036";
 const string stdImgType = "png";
-const int stdNumDigits = 2;
+//const int stdNumDigits = 2;
+const int stdNumDigits = 1;
 const int stdNumImgs = 2;
-const int stdStartImg = 1;
+//const int stdStartImg = 1;
+const int stdStartImg = 0;
+
+// parameters to modify flow field coloring
+const float stdFlowColorScale = 0.8f;
+const float stdImgVisiblity = 0.4f;
 
 // uncomment to use the camera
 //#define CAMERA
@@ -158,8 +166,8 @@ void calculateFlow(float* u1, float* u2, float* v1, float* v2, float* out, float
 		cout << "Flow field energy in iteration " << i << ": " << energy << endl;*/
 	}
 
-	createColorCoding<<<grid2dborder, block2d>>>(d_v1, d_v2, d_out, wborder, hborder, colorBorder);
-	//createColorCoding<<<grid2dborder, block2d>>>(d_u1, d_v1, d_v2, d_out, wborder, hborder, nc, colorBorder);
+	//createColorCoding<<<grid2dborder, block2d>>>(d_v1, d_v2, d_out, wborder, hborder, colorBorder, stdFlowColorScale);
+	createColorCoding<<<grid2dborder, block2d>>>(d_u1, d_v1, d_v2, d_out, wborder, hborder, nc, colorBorder, stdImgVisiblity, stdFlowColorScale);
 	cudaDeviceSynchronize();
 	CUDA_CHECK;
 
@@ -214,11 +222,11 @@ int main(int argc, char **argv)
 	cout << "gray: " << gray << endl;
 
 	// ### Define your own parameters here as needed    
-	float gamma = 10.f;
+	float gamma = 8.f;
 	getParam("gamma", gamma, argc, argv);
 	cout << "gamma: " << gamma << endl;
 
-	int colorBorder = 4;
+	int colorBorder = 6;
 	getParam("border", colorBorder, argc, argv);
 	cout << "color coding border: " << colorBorder << endl;
 
@@ -394,19 +402,22 @@ int main(int argc, char **argv)
 		showImage("In1", mIn1, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
 		showImage("In2", mIn2, 100, 100 + h + 40);
 #else
-		showImage("Input1", mIn[0], 100, 100);
-		showImage("Input2", mIn[1], 100, 100);
+		//showImage("Input1", mIn[0], 100, 100);
+		//showImage("Input2", mIn[1], 100, 100);
 #endif
 		
 		// show output image: first convert to interleaved opencv format from the layered raw array
 		convert_layered_to_mat(mOut, imgOut);
-		showImage("ColorCoded", mOut, 100 + w + 40, 100);
+		//showImage("ColorCoded", mOut, 100 + w + 40, 100);
 
 		// ### Display your own output images here as needed
-		convert_layered_to_mat(mV1, v1);
-		showImage("V1", (mV1 + 1.0f) / 2.0f, 100 +  2 * w + 80, 100);
-		convert_layered_to_mat(mV2, v2);
-		showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + 3 * w + 120, 100);
+		//convert_layered_to_mat(mV1, v1);
+		//showImage("V1", (mV1 + 1.0f) / 2.0f, 100 +  2 * w + 80, 100);
+		//convert_layered_to_mat(mV2, v2);
+		//showImage("V2", (mV2 + 1.0f) / 2.0f, 100 + 3 * w + 120, 100);
+
+		string name = imgPath + "flow_" + imgName + to_string(startImg) + ".png";
+		cv::imwrite(name, mOut*255.f);
 
 #ifdef CAMERA
 		// end of camera loop

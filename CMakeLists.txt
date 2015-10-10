@@ -6,7 +6,7 @@ project(SuperResolution)
 find_package(CUDA REQUIRED)
 
 # Set options for NVCC
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-arch sm_35)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-arch sm_35;-std=c++11)
 set(CUDA_SEPARABLE_COMPILATION ON)
 
 # Find all sourcecode files
